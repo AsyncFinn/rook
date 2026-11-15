@@ -53,6 +53,11 @@ pub(super) fn native(owner: &str, name: &str) -> Option<RawMethod> {
         return Some(m);
     }
     Some(match (owner, name) {
+        ("Players", "GetPlayers" | "getPlayers" | "players") => get_players,
+        ("Players", "GetPlayerFromCharacter" | "playerFromCharacter") => player_from_character,
+        ("Players", "GetPlayerByUserId") => player_by_user_id,
+        ("Player", "LoadCharacter" | "LoadCharacterAsync") => load_character,
+        ("Humanoid", "TakeDamage") => take_damage,
         ("Players", "GetHumanoidDescriptionFromUserId") => appearance::description_from_user_id,
         ("Humanoid", "ApplyDescription" | "ApplyDescriptionReset") => appearance::apply_description,
         ("Humanoid", "GetAppliedDescription") => appearance::get_applied_description,

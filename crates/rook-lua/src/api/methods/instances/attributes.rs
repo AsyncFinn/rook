@@ -197,3 +197,31 @@ pub(super) fn get_all_tags(lua: &Lua, _: InstanceId, _: &Args) -> ApiResult<Outc
     let tags = with_world(lua, |w| w.dom.all_tags());
     Outcome::ret(lua, lua.create_sequence_from(tags)?)
 }
+
+pub(super) fn native(owner: &str, name: &str) -> Option<RawMethod> {
+    Some(match (owner, name) {
+        ("Instance", "GetAttributeChangedSignal") => attribute_changed_signal,
+        ("Instance", "GetAttribute") => get_attribute,
+        ("Instance", "SetAttribute") => set_attribute,
+        ("Instance", "GetAttributes") => get_attributes,
+        ("Instance", "AddTag") => add_tag,
+        ("Instance", "RemoveTag") => remove_tag,
+        ("Instance", "HasTag") => has_tag,
+        ("Instance", "GetTags") => get_tags,
+        ("CollectionService", "AddTag") => {
+            |l, _, a| collection_tag(l, a, add_tag, NullTags::Nothing)
+        }
+        ("CollectionService", "RemoveTag") => {
+            |l, _, a| collection_tag(l, a, remove_tag, NullTags::Nothing)
+        }
+        ("CollectionService", "HasTag") => |l, _, a| collection_tag(l, a, has_tag, NullTags::False),
+        ("CollectionService", "GetTags") => {
+            |l, _, a| collection_tag(l, a, get_tags, NullTags::Empty)
+        }
+        ("CollectionService", "GetTagged") => get_tagged,
+        ("CollectionService", "GetAllTags") => get_all_tags,
+        ("CollectionService", "GetInstanceAddedSignal") => |l, _, a| tag_signal(l, a, true),
+        ("CollectionService", "GetInstanceRemovedSignal") => |l, _, a| tag_signal(l, a, false),
+        _ => return None,
+    })
+}

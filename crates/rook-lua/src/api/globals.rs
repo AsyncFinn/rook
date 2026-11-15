@@ -90,7 +90,7 @@ pub(crate) fn install(lua: &Lua) -> mlua::Result<()> {
         "get_callback",
         lua.create_function(|lua, (inst, name): (mlua::AnyUserData, String)| {
             let id = inst.borrow::<super::instance::LuaInstance>()?.0;
-            super::methods::get_callback(lua, id, &name)
+            super::methods::instances::bindables::get_callback(lua, id, &name)
         })?,
     )?;
     lua.set_named_registry_value("rook.std", std.clone())?;
@@ -110,7 +110,7 @@ pub(crate) fn install(lua: &Lua) -> mlua::Result<()> {
     g.set("getfenv", getfenv::getfenv(lua, std.get("error")?)?)?;
     std.set(
         "datastore",
-        super::methods::data_stores::datastore_helpers(lua)?,
+        super::methods::web::data_stores::datastore_helpers(lua)?,
     )?;
     g.set(
         "version",

@@ -212,3 +212,20 @@ pub(super) fn get_mass(lua: &Lua, this: InstanceId, _: &Args) -> ApiResult<Outco
     let mass = with_world(lua, |w| w.physics.part_mass(&w.dom, this));
     Outcome::ret(lua, f64::from(mass))
 }
+
+pub(super) fn native(owner: &str, name: &str) -> Option<RawMethod> {
+    Some(match (owner, name) {
+        ("BasePart", "GetRenderCFrame") => get_render_cframe,
+        ("PVInstance", "GetPivot") => get_pivot,
+        ("PVInstance", "PivotTo") => pivot_to,
+        ("Model", "GetPrimaryPartCFrame") => get_primary_part_cframe,
+        ("Model", "SetPrimaryPartCFrame") => set_primary_part_cframe,
+        ("Model", "GetModelCFrame") => get_model_cframe,
+        ("Model", "TranslateBy") => translate_by,
+        ("Model", "MoveTo" | "move" | "moveTo") => model_move_to,
+        ("Model", "GetExtentsSize" | "GetModelSize") => get_extents_size,
+        ("Model", "GetBoundingBox") => get_bounding_box,
+        ("BasePart", "GetMass" | "getMass") => get_mass,
+        _ => return None,
+    })
+}

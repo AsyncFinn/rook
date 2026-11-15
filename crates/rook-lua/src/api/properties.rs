@@ -310,7 +310,7 @@ pub(crate) fn get(w: &World, id: InstanceId, name: &str) -> Option<Value> {
         )),
         // Observed: a copy's size, and smooth whatever was copied.
         "SizeInCells" if dom.is_a(id, "TerrainRegion") => {
-            let (_, size) = super::methods::terrain_region_voxels(dom, id);
+            let (_, size) = super::methods::terrain::region_voxels_of(dom, id);
             Some(Value::Vector3(rook_types::Vector3::new(
                 size.x as f32,
                 size.y as f32,
@@ -326,9 +326,9 @@ pub(crate) fn get(w: &World, id: InstanceId, name: &str) -> Option<Value> {
         // assembly's mass is infinite.
         // Read-only, and not where rays start. The default camera's
         // occlusion reads it.
-        "NearPlaneZ" if dom.class_name(id) == "Camera" => {
-            Some(Value::Float32(-super::methods::camera::near_plane(w, id)))
-        }
+        "NearPlaneZ" if dom.class_name(id) == "Camera" => Some(Value::Float32(
+            -super::methods::camera::rays::near_plane(w, id),
+        )),
         "RootPart" | "Torso" if dom.class_name(id) == "Humanoid" => Some(Value::Ref(
             dom.parent(id)
                 .and_then(|model| super::methods::characters::root_part(dom, model))

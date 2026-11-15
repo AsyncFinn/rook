@@ -17,7 +17,7 @@ draw order), the wheel and bar drags in `scroll_input.rs`, tints and
 hover images in `draw/frame.rs` and `draw/image.rs`, the caret in
 `draw/caret.rs`; the events in `rook-engine/src/bridges/input/`
 (`gui.rs`, `textbox.rs`); TextBox focus in
-`rook-lua/src/api/methods/textbox.rs`, lost to a move in
+`rook-lua/src/api/methods/gui/textbox.rs`, lost to a move in
 `rook-lua/src/threads.rs` (`dispatch`).
 
 ## Coordinates

@@ -1,14 +1,14 @@
 //! HttpService: JSON, GUIDs and URL encoding; scripts' requests are
 //! refused. CoreScripts' requests to Roblox's web domains
 //! (`HttpService:RequestInternal`, HttpRbxApiService) go out only where
-//! the domain has an endpoint ([`super::web`]), and fail as offline
+//! the domain has an endpoint ([`super::requests`]), and fail as offline
 //! otherwise, which the CoreScripts handle.
 
 use mlua::{IntoLuaMulti, Lua, MultiValue, Table, Value as LuaValue};
 use rook_dom::InstanceId;
 
 use super::RawMethod;
-use super::web::{self, WebAnswer, WebRequest};
+use super::requests::{self as web, WebAnswer, WebRequest};
 use crate::ctx::args::Args;
 use crate::ctx::{ApiResult, Outcome, ScriptError, api_fn};
 

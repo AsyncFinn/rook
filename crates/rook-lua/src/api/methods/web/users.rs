@@ -1,6 +1,6 @@
 //! Who users are: names and ids (`users`), friendships (`friends`) and
 //! group roles (`groups`), and what they own: badges (`badges`), passes
-//! and assets (`inventory`). With no endpoint ([`super::web`]), the
+//! and assets (`inventory`). With no endpoint ([`super::requests`]), the
 //! session is all there is: its players are the only users, none are
 //! friends or in a group, and nobody owns anything.
 
@@ -10,7 +10,7 @@ use serde_json::{Value as Json, json};
 
 use super::RawMethod;
 use super::characters::players_of;
-use super::web::{self, WebAnswer, WebRequest};
+use super::requests::{self as web, WebAnswer, WebRequest};
 use crate::ctx::args::Args;
 use crate::ctx::{ApiResult, Outcome, ScriptError, with_world};
 

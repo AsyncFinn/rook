@@ -68,20 +68,20 @@ pub(super) fn method_function(
             )))
         })?,
     };
-    let f = match methods::fast(owner, resolved) {
+    let f = match methods::instances::tree::fast(owner, resolved) {
         Some((core, takes_string)) => fast_method(lua, core, takes_string, f)?,
-        None if methods::keeps_children(owner, resolved) => kept_children(lua, f)?,
+        None if methods::instances::tree::keeps_children(owner, resolved) => kept_children(lua, f)?,
         None => f,
     };
     c.methods.borrow_mut().insert(key, f.clone());
     Ok(f)
 }
 
-/// A method with a fast form (see [`methods::fast`]): a Luau wrapper calls
+/// A method with a fast form (see [`methods::instances::tree::fast`]): a Luau wrapper calls
 /// `core` with the instance's key, and `general` for anything else.
 pub(super) fn fast_method(
     lua: &Lua,
-    core: methods::Core,
+    core: methods::instances::tree::Core,
     takes_string: bool,
     general: Function,
 ) -> mlua::Result<Function> {
@@ -95,11 +95,11 @@ pub(super) fn fast_method(
                 !matches!(flag, LuaValue::Nil | LuaValue::Boolean(false)),
             );
             Ok(match found {
-                methods::Found::Bool(b) => (LuaValue::Boolean(b), None),
-                methods::Found::Instance(Some(id)) => {
+                methods::instances::tree::Found::Bool(b) => (LuaValue::Boolean(b), None),
+                methods::instances::tree::Found::Instance(Some(id)) => {
                     (LuaValue::LightUserData(key_of(id)), Some(1))
                 }
-                methods::Found::Instance(None) => (LuaValue::Nil, None),
+                methods::instances::tree::Found::Instance(None) => (LuaValue::Nil, None),
             })
         },
     )?;
@@ -107,7 +107,7 @@ pub(super) fn fast_method(
     wrap.call((fast, general, takes_string))
 }
 
-/// `GetChildren`'s fast form (see [`methods::keeps_children`]): the
+/// `GetChildren`'s fast form (see [`methods::instances::tree::keeps_children`]): the
 /// children's keys and the DOM's version of them, or only the version when
 /// it equals `kept` (debug builds check every kept array this way). The
 /// Luau wrapper copies a kept array without calling this; it's dropped

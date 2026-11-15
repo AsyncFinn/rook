@@ -61,14 +61,14 @@ pub(crate) fn install(lua: &Lua) -> mlua::Result<()> {
         std.set(name, g.get::<LuaValue>(name)?)?;
     }
     let api: Table = lua
-        .load(include_str!("../luau/text_chat.luau"))
+        .load(include_str!("../../luau/text_chat.luau"))
         .set_name("=[rook] TextChat")
         .call(std.clone())?;
     std.set("text_chat", api.clone())?;
     // Servers give each joining player the default channels.
     let is_client = with_world(lua, |w| w.is_client);
     if !is_client && let Some(players) = with_world(lua, |w| w.dom.find_service("Players")) {
-        let added = super::super::instance::get_member(lua, players, "PlayerAdded")
+        let added = crate::api::instance::get_member(lua, players, "PlayerAdded")
             .map_err(|e| mlua::Error::RuntimeError(e.0))?
             .0;
         let connect: mlua::Function = lua

@@ -10,7 +10,7 @@ The conformance cases `gui/layout`, `gui/ui_layouts` and
 `gui/layout_timing` hold the decisive values; Rook passes all three.
 
 Code: layout and drawing order in `rook-gui`; the script side in
-`rook-lua` (`api/instance/access.rs` reads, `api/methods/gui.rs`); the
+`rook-lua` (`api/instance/access.rs` reads, `api/methods/gui/screen.rs`); the
 GUI pass in `rook-render/src/renderer/gui.rs`.
 
 ## The screen

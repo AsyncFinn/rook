@@ -108,3 +108,20 @@ pub(super) fn set_desired_angle(lua: &Lua, this: InstanceId, a: &Args) -> ApiRes
     })?;
     Outcome::ret(lua, ())
 }
+
+pub(super) fn native(owner: &str, name: &str) -> Option<RawMethod> {
+    Some(match (owner, name) {
+        ("BasePart", "GetJoints") => get_joints,
+        ("BasePart", "GetConnectedParts") => get_connected_parts,
+        ("BasePart", "GetRootPart") => get_root_part,
+        ("BasePart", "IsGrounded") => is_grounded,
+        ("BasePart", "MakeJoints" | "makeJoints") => part_make_joints,
+        ("BasePart", "BreakJoints" | "breakJoints") => part_break_joints,
+        ("Model", "MakeJoints" | "makeJoints") => model_make_joints,
+        ("Model", "BreakJoints" | "breakJoints") => model_break_joints,
+        ("Workspace", "MakeJoints") => workspace_make_joints,
+        ("Workspace", "BreakJoints") => workspace_break_joints,
+        ("Motor", "SetDesiredAngle") => set_desired_angle,
+        _ => return None,
+    })
+}

@@ -13,7 +13,7 @@ use glam::{Vec2, Vec3};
 use rook_dom::{Dom, InstanceId};
 use rustc_hash::FxHashSet;
 
-use crate::api::methods::camera::{Lens, project};
+use crate::api::methods::camera::rays::{Lens, project};
 use crate::world::World;
 
 /// A prompt near enough to show it or its indicator.

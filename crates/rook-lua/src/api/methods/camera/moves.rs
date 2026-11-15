@@ -218,7 +218,7 @@ fn tilt_units(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<Outcome> {
 fn zoom_to_extents(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<Outcome> {
     let at = a.userdata::<LCFrame>(0, "CFrame")?.0;
     let size = a.vector3(1)?.0.abs();
-    let lens = with_world(lua, |w| super::camera::Lens::of(&w.dom, this));
+    let lens = with_world(lua, |w| super::rays::Lens::of(&w.dom, this));
     let radius = at.box_reach(size).length().max(MIN_EXTENT);
     let tan = (lens.fov.to_radians() * 0.5).tan();
     let half = tan.min(tan * lens.viewport.x / lens.viewport.y).atan();

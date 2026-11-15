@@ -218,3 +218,37 @@ pub(super) fn clone(lua: &Lua, this: InstanceId, _: &Args) -> ApiResult<Outcome>
 pub(super) fn get_full_name(lua: &Lua, this: InstanceId, _: &Args) -> ApiResult<Outcome> {
     Outcome::ret(lua, with_world(lua, |w| w.dom.full_name(this)))
 }
+
+pub(super) fn native(owner: &str, name: &str) -> Option<RawMethod> {
+    Some(match (owner, name) {
+        ("Object", "IsA") => is_a,
+        ("Object", "GetPropertyChangedSignal") => property_changed_signal,
+        ("Instance", "FindFirstChild") => find_first_child,
+        ("Instance", "FindFirstChildOfClass") => find_first_child_of_class,
+        ("Instance", "FindFirstChildWhichIsA") => find_first_child_which_is_a,
+        ("Instance", "FindFirstAncestor") => find_first_ancestor,
+        ("Instance", "FindFirstAncestorOfClass") => find_first_ancestor_of_class,
+        ("Instance", "FindFirstAncestorWhichIsA") => find_first_ancestor_which_is_a,
+        ("Instance", "FindFirstDescendant") => find_first_descendant,
+        ("Instance", "GetChildren" | "children") => get_children,
+        ("Instance", "GetDescendants") => get_descendants,
+        ("Instance", "IsDescendantOf") => is_descendant_of,
+        ("Instance", "IsAncestorOf") => is_ancestor_of,
+        ("Instance", "Destroy") => destroy,
+        ("Instance", "Remove") => remove,
+        ("Instance", "ClearAllChildren") => clear_all_children,
+        ("Instance", "Clone") => clone,
+        ("Instance", "GetFullName") => get_full_name,
+        ("Instance", "GetActor") => nil,
+        _ => return None,
+    })
+}
+pub(super) fn luau_source(owner: &str, name: &str) -> Option<&'static str> {
+    match (owner, name) {
+        // Confirmed: creator-docs Instance:WaitForChild (returns nil after
+        // timeOut; without one, warns about a possible infinite yield after
+        // 5 seconds). Warning text is Inference.
+        ("Instance", "WaitForChild") => Some(include_str!("../../luau/wait_for_child.luau")),
+        _ => None,
+    }
+}

@@ -17,7 +17,7 @@ Code: installing the scripts in `rook-engine`'s `core_scripts.rs`, the
 camera after spawning in `session/host.rs`, what the window takes from
 the camera in `bridges/camera.rs` and the input it gives in
 `bridges/input.rs`; `Camera:Interpolate` and a Scriptable camera's Focus
-in `rook-lua`'s `api/methods/camera_moves.rs`, `Player:Move` in
+in `rook-lua`'s `api/methods/camera/moves.rs`, `Player:Move` in
 `characters/movement.rs`, `Enum.PlayerActions` bindings in
 `luau/context_action.luau`; `rook-client`'s `window/camera.rs` and
 `window/mouse.rs`.
@@ -145,7 +145,7 @@ Studio, which Rook's run matches.
 
 Observed in Studio 0.747 on 2026-11-14, on the playtest server and
 client; the server's half is the conformance case `physics/camera`. Code
-in `rook-lua`'s `api/methods/camera.rs` (roll, near plane),
+in `rook-lua`'s `api/methods/camera/rays.rs` (roll, near plane),
 `camera_moves.rs` (orbit steps, ZoomToExtents) and
 `camera_occlusion.rs`.
 

@@ -216,3 +216,24 @@ pub(super) fn get_spectrum(lua: &Lua, this: InstanceId, _: &Args) -> ApiResult<O
         lua.create_sequence_from(bins.into_iter().map(f64::from))?,
     )
 }
+
+pub(super) fn native(owner: &str, name: &str) -> Option<RawMethod> {
+    Some(match (owner, name) {
+        ("SoundService", "GetMixerTime") => get_mixer_time,
+        ("AudioPlayer", "Play") => audio_play,
+        ("AudioPlayer", "Stop") => audio_stop,
+        ("AudioPlayer", "Cancel") => audio_cancel,
+        (c, "GetInputPins") if crate::audio_api::pins(c).is_some() => get_input_pins,
+        (c, "GetOutputPins") if crate::audio_api::pins(c).is_some() => get_output_pins,
+        (c, "GetConnectedWires") if crate::audio_api::pins(c).is_some() => get_connected_wires,
+        ("AudioEmitter" | "AudioListener", "SetDistanceAttenuation") => set_distance_attenuation,
+        ("AudioEmitter" | "AudioListener", "GetDistanceAttenuation") => get_distance_attenuation,
+        ("AudioEmitter" | "AudioListener", "SetAngleAttenuation") => set_angle_attenuation,
+        ("AudioEmitter" | "AudioListener", "GetAngleAttenuation") => get_angle_attenuation,
+        ("AudioEmitter" | "AudioListener", "GetAudibilityFor") => get_audibility_for,
+        ("AudioEmitter", "GetInteractingListeners") => get_interacting_listeners,
+        ("AudioListener", "GetInteractingEmitters") => get_interacting_emitters,
+        ("AudioAnalyzer", "GetSpectrum") => get_spectrum,
+        _ => return None,
+    })
+}

@@ -1,6 +1,6 @@
 //! Text filtering: `TextService:FilterStringAsync` and its
 //! TextFilterResult, and Chat's older filtering members. With no endpoint
-//! for the `textfilter` domain ([`super::web`]) text passes through
+//! for the `textfilter` domain ([`super::requests`]) text passes through
 //! unchanged: a local session has no one to filter for. Roblox filters
 //! through a service of its own with no public API, so the request is
 //! Rook's (`docs/design/web-endpoints.md`).
@@ -10,7 +10,7 @@ use rook_dom::InstanceId;
 use serde_json::json;
 
 use super::RawMethod;
-use super::web::{self, WebRequest};
+use super::requests::{self as web, WebRequest};
 use crate::api::instance::push_instance;
 use crate::ctx::args::Args;
 use crate::ctx::{ApiResult, Outcome, with_world};

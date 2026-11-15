@@ -81,7 +81,7 @@ pub(crate) fn set_member(lua: &Lua, id: InstanceId, key: &str, value: LuaValue) 
                     )));
                 }
             };
-            methods::set_callback(lua, id, name, f)?;
+            methods::instances::bindables::set_callback(lua, id, name, f)?;
             return Ok(());
         }
         // Roblox's CoreScripts set members newer than Rook's API snapshot

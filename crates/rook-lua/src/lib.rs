@@ -22,8 +22,7 @@ mod world;
 
 use threads::watchdog;
 
-pub use api::methods::assets::AssetModel;
-pub use api::methods::camera::{Lens, rolled, viewport_ray};
+pub use api::methods::camera::rays::{Lens, rolled, viewport_ray};
 pub use api::methods::characters::movement::drives as humanoid_drives;
 pub use api::methods::characters::movement::face_camera;
 pub use api::methods::characters::ownership::{authority, network_owner};
@@ -31,9 +30,10 @@ pub use api::methods::characters::{
     Avatar, BuildRig, RigSource, RigType, Scales, character_root, humanoid_of_root, humanoid_root,
     root_part,
 };
+pub use api::methods::content::assets::AssetModel;
 pub use api::methods::prompts::{Action as PromptAction, ActionKind as PromptActionKind};
 pub use api::methods::tools::{Activation as ToolActivation, ToolMove};
-pub use api::methods::web::{WebAnswer, WebRequest};
+pub use api::methods::web::requests::{WebAnswer, WebRequest};
 pub use net::{NetValue, RemoteKind, RemoteMessage};
 pub use world::{
     Compiled, EffectCall, Listener, LogEntry, MessageType, SignalBehavior, SoundControl,
@@ -237,7 +237,7 @@ impl Runtime {
     /// (clients, each frame after RenderStepped).
     pub fn step_cameras(&self) {
         self.guarded(|| {
-            api::methods::camera_moves::step(&self.lua);
+            api::methods::camera::moves::step(&self.lua);
             threads::drain_deferred(&self.lua);
         });
     }
@@ -341,7 +341,7 @@ impl Runtime {
     /// Give TextBox `id` focus as clicking it does, its caret before
     /// character `caret` (`None`: at the end), firing what that fires.
     pub fn focus_text_box(&self, id: InstanceId, caret: Option<usize>) {
-        let focused = self.guarded(|| api::methods::textbox::focus(&self.lua, id, caret));
+        let focused = self.guarded(|| api::methods::gui::textbox::focus(&self.lua, id, caret));
         if let Err(e) = focused {
             tracing::warn!("focusing a TextBox failed: {e}");
         }
@@ -356,7 +356,7 @@ impl Runtime {
                 Some(id) => mlua::Value::UserData(api::instance::push_instance(&self.lua, id)?),
                 None => mlua::Value::Nil,
             };
-            api::methods::textbox::release(&self.lua, enter_pressed, cause, false)
+            api::methods::gui::textbox::release(&self.lua, enter_pressed, cause, false)
         });
         if let Err(e) = released {
             tracing::warn!("releasing a TextBox failed: {e}");
@@ -364,7 +364,7 @@ impl Runtime {
     }
 
     pub fn focused_text_box(&self) -> Option<InstanceId> {
-        api::methods::textbox::focused(&self.lua)
+        api::methods::gui::textbox::focused(&self.lua)
     }
 
     /// `Instance:Destroy()` from the engine (fallen parts), firing the
@@ -398,7 +398,7 @@ impl Runtime {
     /// signals it causes.
     pub fn load_character(&self, player: InstanceId) -> Result<InstanceId, ScriptError> {
         self.guarded(|| {
-            let r = api::methods::spawn_character(&self.lua, player);
+            let r = api::methods::characters::spawn_character(&self.lua, player);
             threads::drain_deferred(&self.lua);
             r
         })
@@ -679,7 +679,7 @@ impl Runtime {
             return;
         }
         self.guarded(|| {
-            api::methods::preload::deliver(&self.lua, results);
+            api::methods::content::preload::deliver(&self.lua, results);
             threads::drain_deferred(&self.lua);
         });
     }
@@ -694,7 +694,7 @@ impl Runtime {
     /// holding its instances, and the threads waiting for it resume.
     pub fn deliver_asset(&self, request: u64, model: AssetModel) {
         self.guarded(|| {
-            api::methods::assets::deliver(&self.lua, request, model);
+            api::methods::content::assets::deliver(&self.lua, request, model);
             threads::drain_deferred(&self.lua);
         });
     }
@@ -714,7 +714,7 @@ impl Runtime {
     /// Deliver a web request's answer: the member waiting on it returns.
     pub fn deliver_web(&self, request: u64, answer: WebAnswer) {
         self.guarded(|| {
-            api::methods::web::deliver(&self.lua, request, answer);
+            api::methods::web::requests::deliver(&self.lua, request, answer);
             threads::drain_deferred(&self.lua);
         });
     }

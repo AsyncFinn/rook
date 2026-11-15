@@ -83,7 +83,7 @@ pub(super) fn luau_source(owner: &str, name: &str) -> Option<&'static str> {
         // Pages are plain tables here (Approximation: Roblox returns a
         // DataStorePages instance; scripts use the same members).
         ("OrderedDataStore", "GetSortedAsync") => {
-            include_str!("../luau/get_sorted_async.luau")
+            include_str!("../../luau/get_sorted_async.luau")
         }
         _ => return None,
     })
@@ -91,7 +91,7 @@ pub(super) fn luau_source(owner: &str, name: &str) -> Option<&'static str> {
 
 /// Shared helpers for the DataStore sources, built once.
 pub(crate) fn datastore_helpers(lua: &Lua) -> mlua::Result<Table> {
-    lua.load(include_str!("../luau/datastore.luau"))
+    lua.load(include_str!("../../luau/datastore.luau"))
         .set_name("=[rook] DataStore")
         .call((
             lua.globals().get::<LuaValue>("error")?,

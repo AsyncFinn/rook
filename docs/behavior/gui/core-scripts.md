@@ -14,7 +14,7 @@ looks from `rook-player --core-scripts --screenshot`.
 Code: loading in `rook-engine`'s `core_scripts.rs` (and the
 `coreScripts` setting in `settings.rs`), the compiled scripts in
 `rook-formats`' `compiled.rs`, running them in `rook-lua`'s
-`api/scripts.rs`, their members in `api/methods/core.rs`,
+`api/scripts.rs`, their members in `api/methods/core/flags.rs`,
 `core_gui.rs` and `localization.rs`, styling in `styles.rs`.
 
 ## Where they are

@@ -161,3 +161,16 @@ pub(super) fn play_local_sound(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<
     with_world(lua, |w| w.local_sounds.push(sound));
     Outcome::ret(lua, ())
 }
+
+pub(super) fn native(owner: &str, name: &str) -> Option<RawMethod> {
+    Some(match (owner, name) {
+        ("Sound", "Play") => sound_play,
+        ("Sound", "Resume") => sound_resume,
+        ("Sound", "Stop") => sound_stop,
+        ("Sound", "Pause") => sound_pause,
+        ("SoundService", "SetListener") => set_listener,
+        ("SoundService", "GetListener") => get_listener,
+        ("SoundService", "PlayLocalSound") => play_local_sound,
+        _ => return None,
+    })
+}

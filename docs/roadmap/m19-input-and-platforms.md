@@ -7,7 +7,7 @@ feeding it the input and the `UserInputService` state it reads. The
 members CoreScripts needed to boot answer fixed values today
 (`GetGamepadConnected`, `GetImageForKeyCode`, `GetStringForKeyCode`,
 `GetPlatform`, `GuiService:IsTenFootInterface` in
-`crates/rook-lua/src/api/methods/core.rs`); steps 1 and 2 move each one
+`crates/rook-lua/src/api/methods/core/flags.rs`); steps 1 and 2 move each one
 they cover next to the other input members
 (`crates/rook-lua/src/api/methods/input.rs`) and have it read the
 devices Rook sees.

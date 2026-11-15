@@ -109,6 +109,14 @@ pub(super) fn debris_add_item(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<O
     Outcome::ret(lua, ())
 }
 
+fn is_server(lua: &Lua, _: InstanceId, _: &Args) -> ApiResult<Outcome> {
+    Outcome::ret(lua, !with_world(lua, |w| w.is_client))
+}
+
+fn is_client(lua: &Lua, _: InstanceId, _: &Args) -> ApiResult<Outcome> {
+    Outcome::ret(lua, with_world(lua, |w| w.is_client))
+}
+
 pub(super) fn get_minutes_after_midnight(
     lua: &Lua,
     this: InstanceId,
@@ -128,4 +136,36 @@ pub(super) fn set_minutes_after_midnight(
         crate::api::properties::set_lighting_hours(w, this, minutes / 60.0)
     })?;
     Outcome::ret(lua, ())
+}
+
+pub(super) fn native(owner: &str, name: &str) -> Option<RawMethod> {
+    Some(match (owner, name) {
+        ("ServiceProvider", "GetService" | "service") => get_service,
+        ("ServiceProvider", "FindService") => find_service,
+        ("DataModel", "IsLoaded") => true_,
+        ("DataModel", "BindToClose") => bind_to_close,
+        ("Debris", "AddItem" | "addItem") => debris_add_item,
+        ("RunService", "IsRunning") => true_,
+        ("RunService", "IsStudio" | "IsRunMode" | "IsEdit") => false_,
+        ("PolicyService", "GetPolicyInfoForPlayerAsync") => policy_info,
+        ("Workspace", "GetServerTimeNow") => server_time_now,
+        ("RunService", "IsServer") => is_server,
+        ("RunService", "IsClient") => is_client,
+        ("Teams", "GetTeams") => get_teams,
+        ("Lighting", "GetMinutesAfterMidnight") => get_minutes_after_midnight,
+        ("Lighting", "SetMinutesAfterMidnight") => set_minutes_after_midnight,
+        _ => return None,
+    })
+}
+pub(super) fn luau_source(owner: &str, name: &str) -> Option<&'static str> {
+    match (owner, name) {
+        // `luau/render_step.luau`, which the engine steps each frame.
+        ("RunService", "BindToRenderStep") => Some(
+            "local r = (...).render_step return function(_, name, priority, fn) r.bind(name, priority, fn) end",
+        ),
+        ("RunService", "UnbindFromRenderStep") => {
+            Some("local r = (...).render_step return function(_, name) r.unbind(name) end")
+        }
+        _ => None,
+    }
 }

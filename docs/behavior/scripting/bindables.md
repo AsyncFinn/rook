@@ -3,7 +3,7 @@
 Checked against Studio 0.746 on 2026-11-06.
 
 What arrives through `BindableEvent:Fire` and `BindableFunction:Invoke`
-(`rook_lua::api::methods::bindables::copy`;
+(`rook_lua::api::methods::instances::bindables`;
 `conformance/cases/signals/bindable_copies.luau`).
 
 *When.* `Fire` copies when it's called, not when the listener runs, and each

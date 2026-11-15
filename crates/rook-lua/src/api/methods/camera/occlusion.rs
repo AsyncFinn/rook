@@ -10,7 +10,7 @@ use rook_physics::Filter;
 use rustc_hash::FxHashSet;
 
 use super::RawMethod;
-use super::camera::{Lens, near_plane};
+use super::rays::{Lens, near_plane};
 use crate::ctx::args::{Args, type_name};
 use crate::ctx::convert::from_lua_vector;
 use crate::ctx::{ApiResult, Outcome, ScriptError, with_world};

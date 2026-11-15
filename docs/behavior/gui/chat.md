@@ -9,7 +9,7 @@ on Studio 0.744's install on 2026-10-23 with a place that sends a message
 and a system message; looks from `rook-player --core-scripts --screenshot`.
 
 Code: setting up in `rook-engine`'s `chat.rs`, messages in `rook-lua`'s
-`api/luau/text_chat.luau` and `api/methods/text_chat.rs`.
+`api/luau/text_chat.luau` and `api/methods/gui/text_chat.rs`.
 
 ## Setting up
 

@@ -128,7 +128,7 @@ pub enum EffectCall {
 }
 
 /// What scripts did to a Sound that isn't a property (see
-/// `api/methods/sound.rs`).
+/// `api/methods/audio/sound.rs`).
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub struct SoundControl {
     /// Where `Play` starts: the last `TimePosition` a script set, or 0
@@ -138,7 +138,7 @@ pub struct SoundControl {
     pub loops: u32,
 }
 
-/// The audio API's script state (`api/methods/audio_api.rs`).
+/// The audio API's script state (`api/methods/audio/audio_api.rs`).
 #[derive(Debug, Default)]
 pub struct AudioState {
     /// The graph's instances. Interior mutability, as `Dom`'s defaults
@@ -208,12 +208,12 @@ pub struct World {
     /// ProximityPrompts shown and held here (clients only).
     pub(crate) prompts: crate::api::methods::prompts::Prompts,
     /// ContentProvider requests waiting for the engine to resolve them.
-    pub content: crate::api::methods::preload::ContentRequests,
-    pub assets: crate::api::methods::assets::AssetRequests,
+    pub content: crate::api::methods::content::preload::ContentRequests,
+    pub assets: crate::api::methods::content::assets::AssetRequests,
     /// Web requests waiting for the engine to send them.
-    pub web: crate::api::methods::web::WebRequests,
+    pub web: crate::api::methods::web::requests::WebRequests,
     /// What each TextFilterResult holds.
-    pub(crate) filter_results: FxHashMap<InstanceId, crate::api::methods::filtering::Filtered>,
+    pub(crate) filter_results: FxHashMap<InstanceId, crate::api::methods::web::filtering::Filtered>,
     /// The physics world. Scripts query it (raycasts, regions), which
     /// brings it up to date with the DOM first, so it lives here with the
     /// DOM. Each side steps what it owns (`characters::ownership`).
@@ -296,7 +296,7 @@ pub struct World {
     pub(crate) movement: crate::api::methods::characters::movement::Movement,
     /// Cameras moving by `Camera:Interpolate`.
     pub(crate) interpolations:
-        FxHashMap<InstanceId, crate::api::methods::camera_moves::Interpolation>,
+        FxHashMap<InstanceId, crate::api::methods::camera::moves::Interpolation>,
     /// Scriptable cameras' `SetRoll`, in radians, for those a script rolled.
     pub(crate) camera_rolls: FxHashMap<InstanceId, f32>,
 }
