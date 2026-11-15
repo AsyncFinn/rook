@@ -1,7 +1,6 @@
-//! Characters and what they carry: rigs and spawning, movement, Tools and
-//! explosions.
+//! Characters (docs/behavior/characters/): rigs and spawning, movement and
+//! Tools.
 
-mod explosions;
 mod movement;
 mod spawning;
 mod tools;

@@ -231,10 +231,13 @@ fn position(dm: &DataModel, part: InstanceId) -> glam::Vec3 {
 
 mod audio;
 mod characters;
-mod collect;
 mod content;
+mod effects;
 mod gui;
-mod looks;
+mod input;
+mod lighting;
+mod rendering;
 mod replication;
-mod scripts;
-mod terrain_api;
+mod scripting;
+mod terrain;
+mod unions;

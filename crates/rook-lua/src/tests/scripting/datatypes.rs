@@ -1,4 +1,4 @@
-use super::*;
+use crate::tests::*;
 
 /// Measured in Studio 0.747: datatype constructors read a number argument
 /// that isn't a number, or a string that reads as one, as 0; methods

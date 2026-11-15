@@ -1,7 +1,7 @@
 //! Destroyed instances leave the arena once nothing holds them, with every
 //! reader done with them first: debug builds fail any read of a freed one.
 
-use super::*;
+use crate::tests::*;
 
 /// Parts a script destroyed are freed within a few frames, and every
 /// system that saw them (physics, rendering, GUI, sounds) runs on without

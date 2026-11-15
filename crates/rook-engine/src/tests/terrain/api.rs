@@ -1,7 +1,7 @@
 //! The Terrain API through scripts: edits are seen at once by queries and
 //! reads, and reach `SmoothGrid` at the end of the frame.
 
-use super::*;
+use crate::tests::*;
 
 fn smooth_grid(s: &Server) -> rook_terrain::Grid {
     let w = s.runtime().world();

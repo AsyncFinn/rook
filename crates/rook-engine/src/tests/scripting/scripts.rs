@@ -1,6 +1,6 @@
 //! Starting and stopping Scripts as they move and are enabled or disabled.
 
-use super::*;
+use crate::tests::*;
 
 #[test]
 fn scripts_moved_into_workspace_start() {

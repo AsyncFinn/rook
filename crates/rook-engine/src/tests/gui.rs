@@ -1,8 +1,6 @@
-//! Players' GUI: styles, layout and focus, the chats, prompts,
-//! ContextActionService and gamepads.
+//! Players' GUI (docs/behavior/gui/): objects and styles, the chats and
+//! prompts.
 
-mod context_actions;
-mod gamepads;
 mod legacy_chat;
 mod objects;
 mod prompts;

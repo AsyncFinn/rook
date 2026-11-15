@@ -2,7 +2,7 @@
 //! object and each method decides what that means, where only a missing
 //! argument is `Argument 1 missing or nil` (measured in Studio).
 
-use super::*;
+use crate::tests::*;
 
 /// A handler that hands `Debris` a nil item runs on to its next line, as
 /// a server that drops an item and then tells the client does.

@@ -1,4 +1,4 @@
-use super::*;
+use crate::tests::*;
 
 #[test]
 fn legacy_lowercase_members() {
@@ -93,7 +93,7 @@ fn services_datastore_http_bindables() {
 /// Every no-op member must be documented with what will take it over.
 #[test]
 fn inert_members_are_documented() {
-    let doc = include_str!("../../../../docs/guide/stubs.md");
+    let doc = include_str!("../../../../../docs/guide/stubs.md");
     for (owner, name) in crate::api::methods::inert_members() {
         let row = format!("`{owner}:{name}`");
         let grouped = format!("`{owner}:");

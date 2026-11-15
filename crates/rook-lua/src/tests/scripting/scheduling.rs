@@ -1,4 +1,4 @@
-use super::*;
+use crate::tests::*;
 
 #[test]
 fn wait_and_task_ordering() {

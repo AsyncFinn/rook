@@ -1,4 +1,4 @@
-use super::*;
+use crate::tests::*;
 
 /// Doors that swing by `SetPrimaryPartCFrame(GetPrimaryPartCFrame() * r)`
 /// every frame (a 61k-part place's) used to balloon and vanish: rounding error in

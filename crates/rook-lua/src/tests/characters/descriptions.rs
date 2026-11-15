@@ -1,7 +1,7 @@
 //! HumanoidDescription members, against values read in Studio
 //! (docs/behavior/characters/rigs.md#emotes).
 
-use super::*;
+use crate::tests::*;
 
 #[test]
 fn emotes() {

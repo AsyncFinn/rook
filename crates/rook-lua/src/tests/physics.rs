@@ -1,4 +1,4 @@
-use super::*;
+use crate::tests::*;
 
 /// Writing a NaN or infinite number into a part's pose, size or velocity
 /// (a 2017-era disaster script does) leaves the part where Studio 0.744

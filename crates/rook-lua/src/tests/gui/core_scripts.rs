@@ -1,4 +1,4 @@
-use super::*;
+use crate::tests::*;
 
 #[test]
 fn style_rules_set_what_an_object_leaves_unset() {

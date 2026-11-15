@@ -56,17 +56,8 @@ fn expect(source: &str, frames: u32, lines: &[&str]) {
     assert_eq!(out, lines, "\nsource:\n{source}");
 }
 
-mod core_gui;
-mod datatypes;
-mod descriptions;
-mod errors;
+mod characters;
 mod gui;
-mod instances;
-mod members;
-mod models;
-mod object_arguments;
-mod parts;
-mod scheduling;
-mod scripts;
-mod tools;
-mod tweens;
+mod physics;
+mod pivots;
+mod scripting;

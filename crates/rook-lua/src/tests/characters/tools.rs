@@ -1,4 +1,4 @@
-use super::*;
+use crate::tests::*;
 
 /// Luau building an NPC: a Humanoid of `rig`, an anchored root turned 90
 /// degrees, and a hand of the rig's name welded to it.
