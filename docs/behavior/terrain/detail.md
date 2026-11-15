@@ -142,8 +142,18 @@ the strip to confirm it.
   coarser does, a face toward the finer side, the difference triangulated
   with both outlines as constraints (a constrained Delaunay triangulation,
   `spade`). Which side of an outline is solid comes from its edges'
-  direction; a side neither outline crosses takes what the voxels on both
-  sides of the plane agree on. A crossing of the two outlines splits the
+  direction, counted as a winding number around each triangle (the
+  nonzero rule of polygon fills): the count outside the solid is what
+  most of the outline, by length, has on its empty side, and a triangle
+  is solid where its count is higher. A surface folded over (a thin
+  spike of a material that shifts its vertices) cuts the plane in an
+  outline that crosses itself, with a small loop running backwards;
+  counting keeps that loop to its own triangles, where marking each
+  edge's two sides solid and air once carried solid from the loop across
+  the whole side, a wall of terrain hundreds of studs high
+  (`an_outline_crossing_itself_keeps_to_its_faces`). A side neither
+  outline crosses takes what the voxels on both sides of the plane agree
+  on. A crossing of the two outlines splits the
   finer chunk's edge there, so the closure meets it vertex to vertex; on
   the coarser chunk's edges, those crossings and the ends of the finer
   chunk's side are vertices lying on the edge, a crack far under a pixel. The coarser ring's outline is cut in its own chunk's frame, as
