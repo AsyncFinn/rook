@@ -306,6 +306,11 @@ impl App {
             self.follow(now);
         }
         if let Some(audio) = &mut self.audio {
+            if audio.devices_changed() {
+                self.game
+                    .view_mut()
+                    .set_output_devices(rook_audio::output_devices());
+            }
             // In silence that the mixer has been told of there is nothing
             // to gather, and no reason to take its lock from the audio
             // thread.

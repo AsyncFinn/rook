@@ -127,6 +127,11 @@ impl<K: Hash + Eq + Copy> Mixer<K> {
         }
     }
 
+    /// Frames per second it mixes at.
+    pub fn rate(&self) -> u32 {
+        self.rate
+    }
+
     /// Scale everything heard by `volume` (0 to 1).
     pub fn set_master_volume(&mut self, volume: f32) {
         self.master_volume = volume.clamp(0.0, 1.0);

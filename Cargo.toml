@@ -122,6 +122,11 @@ zeno = "0.3"
 windows-sys = "0.61"
 # Audio output device (rook-audio)
 cpal = "0.15"
+# The system's device-change notifications on Windows (rook-audio): cpal
+# has none. The version wgpu already builds.
+windows = "0.62"
+# What windows' `implement` macro expands to.
+windows-core = "0.62"
 
 # Rendering
 # Rook draws through DX12, Vulkan or Metal; leaving out the GL backend and

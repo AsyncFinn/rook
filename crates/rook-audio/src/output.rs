@@ -1,9 +1,16 @@
 use std::hash::Hash;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 
 use crate::{Device, Mix, Mixer, OutputDevices};
+
+#[cfg(test)]
+mod tests;
+mod watch;
+
+use watch::{Changes, Watch};
 
 /// The machine's output devices now. Listing them asks the system, so
 /// it is done when the game starts, not every frame.
@@ -22,21 +29,38 @@ pub fn output_devices() -> OutputDevices {
     }
 }
 
+/// Where sound is heard. The device follows the system: a lost one is
+/// reopened, the default device is the system's default of the moment,
+/// and a chosen device that goes away gives way to the default until it
+/// comes back.
 pub struct Output<K> {
     device: Device,
     master_volume: f32,
+    /// Outlives the device it plays through, so a device that changes
+    /// at the same rate carries the sounds on where they are.
     mixer: Option<Arc<Mutex<Mixer<K>>>>,
-    /// Kept alive while the game runs; dropping it closes the device.
-    stream: Option<cpal::Stream>,
-    /// Opening failed (no device, or one Rook can't feed); don't retry
-    /// every frame.
+    open: Option<Open>,
+    /// Opening failed (no device, or one Rook can't feed); retried only
+    /// once the system's devices change.
     failed: bool,
+    changes: Arc<Changes>,
+    /// `None` where the system doesn't say when its devices change.
+    _watch: Option<Watch>,
+}
+
+/// The device being played through.
+struct Open {
+    /// Kept alive while it plays; dropping it closes the device.
+    _stream: cpal::Stream,
+    name: Option<String>,
+    /// The device went away (unplugged, disabled): the stream has stopped.
+    lost: Arc<AtomicBool>,
 }
 
 impl<K> std::fmt::Debug for Output<K> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Output")
-            .field("open", &self.stream.is_some())
+            .field("open", &self.open.as_ref().map(|o| &o.name))
             .field("failed", &self.failed)
             .finish()
     }
@@ -46,12 +70,18 @@ impl<K: Hash + Eq + Copy + Send + 'static> Output<K> {
     /// No device yet: `device` opens on the first [`sync`](Self::sync)
     /// with something to hear, at `master_volume` (0 to 1).
     pub fn new(device: Device, master_volume: f32) -> Self {
+        let changes = Arc::new(Changes::default());
+        let watch = Watch::start(changes.clone())
+            .inspect_err(|e| eprintln!("Audio won't follow device changes: {e}"))
+            .ok();
         Self {
             device,
             master_volume,
             mixer: None,
-            stream: None,
+            open: None,
             failed: false,
+            changes,
+            _watch: watch,
         }
     }
 
@@ -62,9 +92,14 @@ impl<K: Hash + Eq + Copy + Send + 'static> Output<K> {
             return;
         }
         self.device = device;
-        self.stream = None;
-        self.mixer = None;
+        self.open = None;
         self.failed = false;
+    }
+
+    /// The system's output devices changed since this was last asked:
+    /// the list the player picks from is out of date.
+    pub fn devices_changed(&self) -> bool {
+        self.changes.take_listed()
     }
 
     /// Hear everything at `volume` (0 to 1) from now on.
@@ -78,8 +113,28 @@ impl<K: Hash + Eq + Copy + Send + 'static> Output<K> {
     }
 
     pub fn sync(&mut self, wanted: &Mix<K>) {
-        if self.mixer.is_none() {
-            if (wanted.sounds.is_empty() && !wanted.graph.has_output()) || self.failed {
+        if self.changes.take_reroute() {
+            self.failed = false;
+            if let Some(open) = &self.open {
+                let now = resolve(&self.device).ok().map(|(_, name)| name);
+                if now.as_ref() != Some(&open.name) {
+                    self.open = None;
+                }
+            }
+        }
+        if self
+            .open
+            .as_ref()
+            .is_some_and(|o| o.lost.load(Ordering::Acquire))
+        {
+            // Reopened right away, on what `device` resolves to now. If that
+            // fails too (the system hasn't picked a new default yet), the
+            // change notification that follows retries it.
+            self.open = None;
+        }
+        if self.open.is_none() {
+            let silent = wanted.sounds.is_empty() && !wanted.graph.has_output();
+            if silent || self.failed {
                 return;
             }
             if let Err(e) = self.open() {
@@ -96,23 +151,29 @@ impl<K: Hash + Eq + Copy + Send + 'static> Output<K> {
     }
 
     fn open(&mut self) -> Result<(), String> {
-        let host = cpal::default_host();
-        let device = match &self.device {
-            Device::Default => host.default_output_device().ok_or("no output device")?,
-            Device::Named(name) => host
-                .output_devices()
-                .map_err(|e| e.to_string())?
-                .find(|d| d.name().is_ok_and(|n| n == *name))
-                .ok_or_else(|| format!("no output device named {name:?}"))?,
-        };
+        let (device, name) = resolve(&self.device)?;
         let supported = device.default_output_config().map_err(|e| e.to_string())?;
         let format = supported.sample_format();
         let config: cpal::StreamConfig = supported.into();
         let channels = usize::from(config.channels);
-        let mut mixer = Mixer::new(config.sample_rate.0);
-        mixer.set_master_volume(self.master_volume);
-        let mixer = Arc::new(Mutex::new(mixer));
-        let error = |e: cpal::StreamError| eprintln!("Audio output error: {e}");
+        let rate = config.sample_rate.0;
+        let mixer = match &self.mixer {
+            Some(m) if m.lock().is_ok_and(|m| m.rate() == rate) => m.clone(),
+            _ => {
+                let mut mixer = Mixer::new(rate);
+                mixer.set_master_volume(self.master_volume);
+                Arc::new(Mutex::new(mixer))
+            }
+        };
+        let lost = Arc::new(AtomicBool::new(false));
+        // Every error ends the stream (WASAPI's loop stops on its first).
+        let error = {
+            let lost = lost.clone();
+            move |e: cpal::StreamError| {
+                eprintln!("Audio output stopped: {e}");
+                lost.store(true, Ordering::Release);
+            }
+        };
         let stream = match format {
             cpal::SampleFormat::F32 => {
                 let mixer = mixer.clone();
@@ -156,8 +217,45 @@ impl<K: Hash + Eq + Copy + Send + 'static> Output<K> {
         .map_err(|e| e.to_string())?;
         stream.play().map_err(|e| e.to_string())?;
         self.mixer = Some(mixer);
-        self.stream = Some(stream);
+        self.open = Some(Open {
+            _stream: stream,
+            name,
+            lost,
+        });
         Ok(())
+    }
+}
+
+/// The device `wanted` plays through now, and its name.
+fn resolve(wanted: &Device) -> Result<(cpal::Device, Option<String>), String> {
+    let host = cpal::default_host();
+    if let Device::Named(_) = wanted {
+        let devices: Vec<(cpal::Device, String)> = host
+            .output_devices()
+            .map_err(|e| e.to_string())?
+            .filter_map(|d| d.name().ok().map(|n| (d, n)))
+            .collect();
+        let names: Vec<&str> = devices.iter().map(|(_, n)| n.as_str()).collect();
+        if let Some(name) = chosen(wanted, &names) {
+            let found = devices.into_iter().find(|(_, n)| n == name);
+            return found
+                .map(|(d, n)| (d, Some(n)))
+                .ok_or_else(|| format!("no output device named {name:?}"));
+        }
+    }
+    let device = host.default_output_device().ok_or("no output device")?;
+    let name = device.name().ok();
+    Ok((device, name))
+}
+
+/// The device of `present` that `wanted` names, while it is there; `None`
+/// is the system's default. A chosen device that is unplugged gives way
+/// to the default, and is played through again once it is back.
+/// Approximation: not compared against Roblox's own choice.
+fn chosen<'a>(wanted: &'a Device, present: &[&str]) -> Option<&'a str> {
+    match wanted {
+        Device::Named(name) if present.contains(&name.as_str()) => Some(name),
+        _ => None,
     }
 }
 
