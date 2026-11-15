@@ -6,7 +6,6 @@
 //! only query theirs. See `docs/design/architecture/scripting.md#signals-and-scheduler-rook-luas-signal-and-scheduler` for the frame order.
 
 mod bridges;
-pub mod build_config;
 mod chat;
 pub mod console;
 pub mod core_scripts;
@@ -17,7 +16,6 @@ mod rigs;
 mod scripts;
 pub mod session;
 pub mod settings;
-pub mod user_settings;
 
 pub use bridges::camera::{CameraView, MouseLock, SavedCamera};
 pub use bridges::input::{CursorLook, InputEvent, ScreenPoint, SystemCursor};
@@ -155,7 +153,7 @@ pub struct DataModel {
     explosions: explosions::Explosions,
     web: web::Web,
     /// The player's settings, on a client given a file for them.
-    user_settings: Option<user_settings::Kept>,
+    user_settings: Option<settings::user_settings::Kept>,
     /// Instances a client's trims freed since [`DataModel::take_freed`]:
     /// copies its scripts destroyed, which replication must forget.
     freed: Vec<InstanceId>,
@@ -198,7 +196,7 @@ impl DataModel {
         let mut dm = Self::with_dom(Dom::new(), options, Role::Client)?;
         let mut w = dm.runtime.world_mut();
         if let Some(path) = &options.user_settings {
-            let (root, kept) = user_settings::Kept::install(&mut w.dom, path);
+            let (root, kept) = settings::user_settings::Kept::install(&mut w.dom, path);
             w.user_settings = Some(root);
             dm.user_settings = Some(kept);
         }

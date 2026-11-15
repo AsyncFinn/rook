@@ -1,7 +1,7 @@
 //! `UserSettings()`: the player's own settings, `GameSettings` (a
 //! UserGameSettings) under a `UserSettings` root outside the DataModel.
 //! The engine fills it from the player's saved file before scripts start
-//! and saves it again (`rook-engine`'s `user_settings.rs`); see
+//! and saves it again (`rook-engine`'s `settings/user_settings.rs`); see
 //! docs/behavior/user-settings.md.
 
 use rook_dom::{Dom, InstanceId};

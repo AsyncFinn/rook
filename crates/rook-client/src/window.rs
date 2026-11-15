@@ -17,7 +17,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use rook_engine::user_settings::{Pacing, PlayerSettings};
+use rook_engine::settings::user_settings::{Pacing, PlayerSettings};
 use rook_engine::{InputEvent, MouseLock};
 use rook_render::{Camera, WindowSurface};
 use rook_scene::{Installed, SceneCache, ToRender};

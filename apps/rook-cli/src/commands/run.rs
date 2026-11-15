@@ -26,7 +26,7 @@ pub(crate) struct Run<'a> {
     /// half a second apart; the run goes on a second after the last.
     pub clicks: &'a [ScreenPoint],
     /// The joined player's settings load from this file and are saved to
-    /// it at the end (`rook_engine::user_settings`).
+    /// it at the end (`rook_engine::settings::user_settings`).
     pub user_settings: Option<&'a Path>,
     /// Keys (`Enum.KeyCode` names) the player presses after the clicks,
     /// half a second apart.

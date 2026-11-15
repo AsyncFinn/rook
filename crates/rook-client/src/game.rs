@@ -11,7 +11,7 @@ use anyhow::Context;
 use rook_engine::console::repl::Side;
 use rook_engine::session::host::{ClientHost, ServerHost};
 use rook_engine::session::server_thread::{ServerThread, Started, Starting};
-use rook_engine::user_settings::PlayerSettings;
+use rook_engine::settings::user_settings::PlayerSettings;
 use rook_engine::{DataModel, InputEvent, Options, console};
 #[cfg(feature = "repl")]
 use rook_lua::MessageType;

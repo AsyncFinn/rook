@@ -200,8 +200,8 @@ pub fn init(options: &Options) {
     }
     crate::settings::warn_waiting();
     if let Some(data) = &data {
-        let old_caches = crate::data_folder::migrate::old_cache_dirs();
-        for change in crate::data_folder::migrate::run(data, &old_caches) {
+        let old_caches = crate::data_folder::old_cache_dirs();
+        for change in crate::data_folder::migrate(data, &old_caches) {
             tracing::info!(target: "rook", "{change}");
         }
     }

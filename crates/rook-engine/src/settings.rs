@@ -1,19 +1,20 @@
 //! Every setting Rook has, resolved once here and handed to the crates
 //! below as plain values; no other crate reads the environment
 //! (docs/design/data-and-logging.md#settings): the build's
-//! ([`crate::build_config`]), the player's ([`crate::user_settings`]), and
+//! ([`crate::settings::build_config`]), the player's ([`crate::settings::user_settings`]), and
 //! run-time ones, each declared once in [`table`]. A flag beats the
 //! variable, which beats the default; [`Tier::Developer`] settings count
 //! only in builds with the `developer-overrides` feature. The Open Cloud
 //! key comes from the OS credential store, read only when it can be used
 //! ([`api_key`]).
 
+pub mod build_config;
 pub mod table;
+pub mod user_settings;
 
 use std::path::PathBuf;
 use std::sync::{Mutex, OnceLock};
 
-use crate::build_config;
 use crate::data_folder::{self, DataDir};
 use rook_content::resolver::ApiKey;
 use rook_content::resolver::cache;
@@ -450,7 +451,7 @@ pub fn framerate_cap(uncapped: Option<bool>, cap: Option<i32>) -> Option<i32> {
 }
 
 /// The output device to play through: `audioDevice`, then the player's
-/// choice (`saved`, from [`crate::user_settings::PlayerSettings`]); `None`
+/// choice (`saved`, from [`crate::settings::user_settings::PlayerSettings`]); `None`
 /// is no sound.
 pub fn audio_device(saved: Option<&str>) -> Option<rook_audio::Device> {
     let chosen = AUDIO_DEVICE.text(None);
