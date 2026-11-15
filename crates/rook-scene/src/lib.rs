@@ -5,6 +5,7 @@
 //! `rook-render`; a server never links it (`docs/design/architecture.md#crate-layout`).
 
 mod camera;
+mod changes;
 mod content;
 mod cursor;
 mod frame;
@@ -33,6 +34,7 @@ mod adornments;
 mod effects;
 mod lighting;
 mod look;
+mod placing;
 mod props;
 mod terrain;
 mod viewports;
@@ -237,223 +239,6 @@ impl SceneCache {
         self.with_effects(|effects, drawn, images| effects.build(dom, drawn, images));
     }
 
-    pub(crate) fn apply(&mut self, dom: &Dom, changes: &RenderChanges) -> SceneChange {
-        profiling::scope!("SceneCache::apply");
-        self.model_highlights.clear();
-        self.effects.note_calls(&changes.effect_calls);
-        let wired =
-            adornments::wireframe::note_calls(dom, &mut self.wire_lines, &changes.effect_calls);
-        let mut changed = Vec::new();
-        // Freed: nothing of them may be read, only dropped.
-        for &id in &changes.collected {
-            self.place(dom, id, false, &mut changed);
-            self.wire_lines.remove(&id);
-            self.highlights_changed |= self.scene.highlights.remove(&id.to_ref().0).is_some();
-        }
-        self.drop_viewports(changes.collected.iter().copied());
-        if !changes.collected.is_empty() {
-            for parts in self.waiting.values_mut() {
-                parts.retain(|p| !changes.collected.contains(p));
-            }
-        }
-        self.note_voxels(changes);
-        if changes.full {
-            self.rebuild(dom);
-            return SceneChange::Full;
-        }
-        if changes.lighting {
-            self.scene.lighting = self.lighting(dom);
-        }
-        self.lights.apply(dom, changes, &mut self.scene.lights);
-        self.with_effects(|effects, drawn, images| effects.changed(dom, changes, drawn, images));
-        let mut moved = Vec::new();
-        if changes.terrain || !changes.terrain_edits.is_empty() {
-            changed.extend(self.terrain_changed(dom, changes.terrain));
-        }
-        self.update_viewports(dom, changes.viewports.iter().copied());
-        for id in &changes.placed {
-            // Only parts in Workspace or a ViewportFrame are drawn.
-            let drawn = is_part(dom, *id) && viewports::space(dom, *id).is_some();
-            self.place(dom, *id, drawn, &mut changed);
-        }
-        for id in changes.parts.iter().chain(&wired) {
-            if self.index.contains_key(id) {
-                self.place(dom, *id, true, &mut changed);
-            }
-        }
-        // Adornments and Highlights alone: the parts' own looks stay.
-        // Nothing adorns or covers a part in a ViewportFrame (observed).
-        let in_workspace = |cache: &Self, i: usize| cache.scene.parts[i].space == Space::Workspace;
-        for id in &changes.adorned {
-            if let Some(&base) = self.index.get(id)
-                && in_workspace(self, base)
-            {
-                let old = self.adornment_layers.remove(id).unwrap_or_default();
-                let new = self.adornments(dom, *id);
-                let kept = self.set_layers(base, old, new, Some(&mut changed));
-                if !kept.is_empty() {
-                    self.adornment_layers.insert(*id, kept);
-                }
-            }
-        }
-        for id in &changes.highlighted {
-            if let Some(&i) = self.index.get(id)
-                && in_workspace(self, i)
-            {
-                let covering = self.highlight(dom, *id);
-                if self.scene.parts[i].highlight != covering {
-                    self.scene.parts[i].highlight = covering;
-                    changed.push(i);
-                }
-            }
-        }
-        for &id in &changes.highlights {
-            let key = id.to_ref().0;
-            if let Some(look) = self.scene.highlights.get_mut(&key) {
-                *look = adornments::highlight::look(dom, id);
-                self.highlights_changed = true;
-            }
-        }
-        // Parts that only moved keep their look: place it at the new CFrame.
-        for id in &changes.moved {
-            let Some(&i) = self.index.get(id) else {
-                continue;
-            };
-            let Some(cf) = dom.drawn_cframe(*id) else {
-                continue;
-            };
-            let layers = [&self.layers, &self.adornment_layers].map(|l| l.get(id));
-            let entries = std::iter::once(i).chain(layers.into_iter().flatten().flatten().copied());
-            for i in entries {
-                let pose = self.poses[i];
-                let part = &mut self.scene.parts[i];
-                part.position = cf.position + cf.rotation * pose.offset;
-                part.rotation = cf.rotation * pose.turn;
-                moved.push(i);
-            }
-        }
-        let lighting = changes.lighting || changes.terrain;
-        let highlights = std::mem::take(&mut self.highlights_changed);
-        if changed.is_empty() && moved.is_empty() && !lighting && !highlights {
-            SceneChange::None
-        } else {
-            SceneChange::Parts {
-                changed,
-                moved,
-                lighting,
-                highlights,
-            }
-        }
-    }
-
-    fn take_index(&mut self, entry: PartInstance, pose: Pose) -> usize {
-        match self.free.pop() {
-            Some(i) => {
-                self.scene.parts[i] = entry;
-                self.poses[i] = pose;
-                i
-            }
-            None => {
-                self.scene.parts.push(entry);
-                self.poses.push(pose);
-                self.scene.parts.len() - 1
-            }
-        }
-    }
-
-    /// Stop drawing entry `i`, keeping its index for reuse.
-    fn release(&mut self, i: usize) {
-        self.scene.parts[i].transparency = 1.0;
-        self.free.push(i);
-    }
-
-    /// Draw `id` (when `drawn`) or stop drawing it, adding the entries that
-    /// changed to `changed`.
-    fn place(&mut self, dom: &Dom, id: InstanceId, drawn: bool, changed: &mut Vec<usize>) {
-        let look = if drawn { self.part(dom, id) } else { None };
-        let old_images = self.layers.remove(&id).unwrap_or_default();
-        let old_adornments = self.adornment_layers.remove(&id).unwrap_or_default();
-        let Some(Drawn {
-            part,
-            pose,
-            images,
-            adornments,
-        }) = look
-        else {
-            if let Some(i) = self.index.remove(&id) {
-                self.shown.remove(&id);
-                self.release(i);
-                changed.push(i);
-            }
-            for i in old_images.into_iter().chain(old_adornments) {
-                self.release(i);
-                changed.push(i);
-            }
-            return;
-        };
-        let base = match self.index.get(&id) {
-            Some(&i) => {
-                self.scene.parts[i] = part;
-                self.poses[i] = pose;
-                i
-            }
-            None => {
-                let i = self.take_index(part, pose);
-                self.index.insert(id, i);
-                i
-            }
-        };
-        changed.push(base);
-        let images = self.set_layers(base, old_images, images, Some(changed));
-        let adornments = self.set_layers(base, old_adornments, adornments, Some(changed));
-        if !images.is_empty() {
-            self.layers.insert(id, images);
-        }
-        if !adornments.is_empty() {
-            self.adornment_layers.insert(id, adornments);
-        }
-    }
-
-    /// Draw `layers` over entry `base` at `old`'s indices, in order (extra
-    /// ones take free indices, leftover ones are released), adding the
-    /// entries that changed to `changed`; the indices they're at now.
-    fn set_layers(
-        &mut self,
-        base: usize,
-        old: Vec<usize>,
-        layers: Vec<(PartInstance, Pose)>,
-        mut changed: Option<&mut Vec<usize>>,
-    ) -> Vec<usize> {
-        let mut kept = Vec::with_capacity(layers.len());
-        let mut old = old.into_iter();
-        for (layer, pose) in layers {
-            let layer = PartInstance {
-                drawn_over: Some(base),
-                space: self.scene.parts[base].space,
-                ..layer
-            };
-            let i = match old.next() {
-                Some(i) => {
-                    self.scene.parts[i] = layer;
-                    self.poses[i] = pose;
-                    i
-                }
-                None => self.take_index(layer, pose),
-            };
-            kept.push(i);
-            if let Some(c) = changed.as_deref_mut() {
-                c.push(i);
-            }
-        }
-        for i in old {
-            self.release(i);
-            if let Some(c) = changed.as_deref_mut() {
-                c.push(i);
-            }
-        }
-        kept
-    }
-
     /// Apply scripts' effect calls (`Emit` and the like) made before this
     /// scene was built from the DataModel. Whether any effect or
     /// wireframe changed.
@@ -477,38 +262,5 @@ impl SceneCache {
 
     pub(crate) fn take_lighting_change(&mut self) -> bool {
         std::mem::take(&mut self.lighting_changed)
-    }
-
-    /// Run `f` on the effect cache with the scene's effect lists and a way
-    /// to load the effects' images.
-    fn with_effects<R>(
-        &mut self,
-        f: impl FnOnce(&mut EffectCache, EffectLists<'_>, &mut Images<'_>) -> R,
-    ) -> R {
-        let mut cache = std::mem::take(&mut self.effects);
-        let mut emitters = std::mem::take(&mut self.scene.emitters);
-        let mut beams = std::mem::take(&mut self.scene.beams);
-        let mut trails = std::mem::take(&mut self.scene.trails);
-        let mut floor_wires = std::mem::take(&mut self.scene.floor_wires);
-        let floors = std::mem::take(&mut self.floors);
-        let drawn = EffectLists {
-            emitters: &mut emitters,
-            beams: &mut beams,
-            trails: &mut trails,
-            floor_wires: &mut floor_wires,
-            floors: &floors,
-        };
-        let mut images = |id: InstanceId, url: &str| match self.file_state(id, url, Want::Image) {
-            FileState::Loaded(hash) => Some(ImageHash(hash)),
-            FileState::Loading | FileState::Failed => None,
-        };
-        let out = f(&mut cache, drawn, &mut images);
-        self.effects = cache;
-        self.scene.emitters = emitters;
-        self.scene.beams = beams;
-        self.scene.trails = trails;
-        self.scene.floor_wires = floor_wires;
-        self.floors = floors;
-        out
     }
 }

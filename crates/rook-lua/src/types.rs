@@ -18,7 +18,7 @@ pub(crate) mod tween_info;
 
 pub(crate) use color::{LBrickColor, LColor3};
 pub(crate) use content::LContent;
-pub(crate) use format::{fmt_f32, fmt_g};
+pub(crate) use format::fmt_f32;
 pub(crate) use gui::font::LFont;
 pub(crate) use gui::udim::{LUDim, LUDim2};
 pub(crate) use opaque::{LAxes, LFaces, LOther, LPhysicalProperties};

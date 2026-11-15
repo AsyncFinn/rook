@@ -1,4 +1,4 @@
-use super::fmt_g;
+use super::format::fmt_g;
 
 #[test]
 fn formats_like_printf_g() {
