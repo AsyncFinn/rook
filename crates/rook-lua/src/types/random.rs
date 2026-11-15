@@ -146,6 +146,12 @@ pub(crate) fn random_new(lua: &Lua, seed: LuaValue) -> mlua::Result<LRandom> {
     }
 }
 
+pub(crate) fn install(lua: &Lua) -> mlua::Result<()> {
+    let random = lua.create_table()?;
+    random.set("new", lua.create_function(random_new)?)?;
+    lua.globals().set("Random", random)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -190,10 +196,4 @@ mod tests {
         assert_eq!(r.next_integer(0.0, 0.0), 0.0);
         assert_ne!(r, LRandom::new(3));
     }
-}
-
-pub(crate) fn install(lua: &Lua) -> mlua::Result<()> {
-    let random = lua.create_table()?;
-    random.set("new", lua.create_function(random_new)?)?;
-    lua.globals().set("Random", random)
 }
