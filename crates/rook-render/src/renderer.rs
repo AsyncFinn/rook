@@ -5,7 +5,6 @@ mod effects;
 mod gui;
 mod highlights;
 mod images;
-pub(crate) mod lighting;
 mod pipelines;
 mod placement;
 mod readback;
@@ -20,6 +19,8 @@ mod worlds;
 use std::sync::Arc;
 
 use super::*;
+use crate::lighting::local::GpuLights;
+use crate::lighting::sky::SkyCube;
 use effects::particles::GpuParticles;
 use effects::ribbons::GpuRibbons;
 use gui::GuiPass;
@@ -28,8 +29,6 @@ use highlights::HighlightParts;
 pub(crate) use images::ImageBinding;
 use images::{Defaults, image_layout, image_set};
 pub(crate) use images::{ImageSet, lone_image};
-use lighting::local::GpuLights;
-use lighting::sky::SkyCube;
 use pipelines::{BindLayouts, Pipelines};
 use placement::Placement;
 use timing::GpuTimer;
@@ -263,7 +262,7 @@ impl Renderer {
             &[vec![vec![128, 128, 255, 128]]],
         );
         let sky_cube = SkyCube::new(&device, &queue);
-        let brdf_view = lighting::sky::rooks_brdf_table(&device, &queue);
+        let brdf_view = crate::lighting::sky::rooks_brdf_table(&device, &queue);
         let main_bind_group = main_bind_group(
             &cx,
             &main_layout,
@@ -501,7 +500,7 @@ impl Renderer {
         if size == 0 || rg16.len() != (size * size * 4) as usize {
             return false;
         }
-        self.brdf_view = lighting::sky::brdf_table(&self.device, &self.queue, size, rg16);
+        self.brdf_view = crate::lighting::sky::brdf_table(&self.device, &self.queue, size, rg16);
         self.rebuild_main_bind_group();
         true
     }

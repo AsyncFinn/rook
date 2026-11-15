@@ -6,6 +6,7 @@
 mod batch;
 mod effects;
 mod gpu;
+mod lighting;
 mod mesh;
 mod renderer;
 mod scene;
@@ -32,7 +33,7 @@ use wgpu::util::DeviceExt;
 
 use batch::cull::{Aabb, Frustum, MOTION_STUDS};
 use gpu::cache::{GpuCache, Upload, UploadBudget, UploadContext};
-use renderer::lighting::shadow::{SHADOW_DISTANCE, SHADOW_SIZE, ShadowView};
+use lighting::shadow::{SHADOW_DISTANCE, SHADOW_SIZE, ShadowView};
 
 use batch::*;
 use gpu::pool::{GpuMesh, MeshPool};
