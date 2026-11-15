@@ -71,14 +71,24 @@ its members in `api/methods/user_settings.rs`; loading and saving in
   one beside Roblox's in the same file, where a launcher can set it.
   The menu's Output Device row sets it, and the window switches device
   at once; the `audioDevice` setting (`ROOK_AUDIO`) overrides it.
+  Sounds go on from where they were across a switch to a device at the
+  same rate.
+- The device follows the system on Windows. With the default chosen,
+  sound moves to the system's new default when it changes, as when the
+  device in use is unplugged. A chosen device that is unplugged gives way
+  to the default, and sound goes back to it when it is plugged in again
+  (Approximation: Roblox's own choice there isn't measured). A device
+  that stops on its own is opened again; on other systems only that
+  part works yet.
 - The Output Device row lists what `SoundService:GetOutputDevices`
   returns: names, ids and the chosen index. Measured in Studio's menu:
   first "Default (*the system default's name*)", then every output
   device by the system's name for it ("Headphones (2- HyperX Cloud III S
   Wireless)"). Roblox's own script adds the "Default (...)" around the
   first name when its id is "". Rook gives each other device its name as
-  id (Inference). The window lists the devices when the game starts;
-  where nothing plays sound the list is empty. Without the list, the
+  id (Inference). The window lists the devices when the game starts and
+  again each time the system's devices change (on Windows); where
+  nothing plays sound the list is empty. Without the list, the
   menu's own script failed each time the menu opened again (`pairs` on
   nil).
 - `MouseSensitivityThirdPerson` (the menu's Camera Sensitivity slider

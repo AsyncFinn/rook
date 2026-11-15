@@ -53,7 +53,7 @@ impl DataModel {
                 tracing::warn!("no {service}: {e}");
             }
         }
-        ensure_camera(&mut dom);
+        ensure_camera(&mut dom, role);
         // Roblox's client names its build here; the menu's version label shows it.
         if let Some(rs) = dom.find_service("RunService") {
             rook_dom::ignore_stale(dom.set_property_by_name(
@@ -143,8 +143,11 @@ impl DataModel {
 }
 
 /// Workspace always has a current camera: Roblox creates one if the place
-/// was saved without (Inference: observed behavior, not documented).
-pub(super) fn ensure_camera(dom: &mut Dom) {
+/// was saved without (Inference: observed behavior, not documented). A
+/// client always makes its own (Camera isn't replicated), at a new
+/// Camera's angle but 12.5 studs back from its Focus (measured in Studio;
+/// see docs/behavior/characters/camera.md#the-camera-before-spawning).
+pub(super) fn ensure_camera(dom: &mut Dom, role: Role) {
     let Ok(ws) = dom.get_service("Workspace") else {
         return;
     };
@@ -163,6 +166,20 @@ pub(super) fn ensure_camera(dom: &mut Dom) {
     dom.attach_unchecked(camera, ws);
     if let Some(p) = dom.property_id(ws, "CurrentCamera") {
         dom.load_property(ws, p, Value::Ref(Some(camera.to_ref())));
+    }
+    if role == Role::Client
+        && let (Some(cf), Some(focus)) = (
+            dom.cframe_property(camera, "CFrame"),
+            dom.cframe_property(camera, "Focus"),
+        )
+        && let Some(p) = dom.property_id(camera, "CFrame")
+    {
+        const BACK: f32 = 12.5;
+        let cf = rook_types::CFrame {
+            position: focus.position - cf.look_vector().0 * BACK,
+            ..cf
+        };
+        dom.load_property(camera, p, Value::CFrame(cf));
     }
 }
 

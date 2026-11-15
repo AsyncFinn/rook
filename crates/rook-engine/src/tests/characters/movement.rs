@@ -420,6 +420,44 @@ fn server_humanoids_walk_and_characters_take_starter_settings() {
     assert!(out.iter().any(|l| l == "npc true 24.0"), "{out:?}");
 }
 
+/// Before a character spawns, a client with a camera script is drawn from
+/// its camera, Fixed where the client made it (measured in Studio:
+/// 12.5 studs back from a Focus at (0, 0, -5), 45° down), not from the
+/// window's flying camera.
+#[test]
+fn a_client_draws_its_camera_before_its_character_spawns() {
+    let mut server = Server::new(&Options::default()).unwrap();
+    add_script(
+        &server,
+        "ServerScriptService",
+        "Main",
+        "game.Players.CharacterAutoLoads = false",
+    );
+    add_local_script(&server, "CameraScript", "");
+    server.start();
+    let mut session = Session::new(server, Options::default());
+    let index = session.join("Watcher", 9).unwrap();
+    session.run_for(0.2);
+    let client = session.client(index).unwrap();
+    let camera = client.current_camera().unwrap();
+    let w = client.runtime().world();
+    assert_eq!(
+        w.dom.enum_item_property(camera, "CameraType"),
+        Some("Fixed")
+    );
+    drop(w);
+    let view = client
+        .scripted_camera()
+        .expect("the window flew its own camera");
+    let focus = glam::Vec3::new(0.0, 0.0, -5.0);
+    let back = 12.5 * std::f32::consts::FRAC_1_SQRT_2;
+    let eye = focus + glam::Vec3::new(0.0, back, back);
+    assert!((view.cframe.position - eye).length() < 1e-3, "{view:?}");
+    assert!((view.focus - focus).length() < 1e-3, "{view:?}");
+    let look = view.cframe.look_vector().0;
+    assert!((look - (focus - eye).normalize()).length() < 1e-3, "{look}");
+}
+
 /// A camera following the character from the render step, as Roblox's
 /// does, is drawn exactly where the character is drawn: the render step
 /// comes after the frame's physics, so both show the same pose.

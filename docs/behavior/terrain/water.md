@@ -71,7 +71,21 @@ Observed:
   and black plates under a slab): it doesn't fade with depth, so shallow
   shores look lighter only for the land seen through them.
 
-Rook: water's surface is surface nets over every non-air voxel. A cell
+- **Water runs on under dry land resting on it** (Studio, 2026-11-15:
+  a 3 × 3 layer of full water on full Rock, one dry Rock voxel of
+  occupancy 0.02 to 1.0 on its middle voxel, air around; rays straight
+  down): the water's surface stays flat at its level under and beside
+  the voxel, sloping only at the layer's edge (8.0 studs above the
+  water layer's floor 0, 1 and 1.9 studs from the voxel's middle, 7.5
+  at 3 and 7.0 at 4), at every occupancy. On a large terrain place
+  this is a shore's faint dry voxels (0.01 to 0.19) lying in a row on
+  the water.
+
+Rook: water's surface is surface nets over every non-air voxel, except
+dry land that touches water only from below: that counts as air, so the
+water's top runs on under it (`water_runs_on_under_dry_land_resting_on_it`;
+counting it as inside left a hole the size of the voxel down to the
+floor, where the land under the water showed through). A cell
 has a water vertex when one of its corners is non-air, and a quad is
 kept when one of its four cells has water at a corner, so the surface
 runs one cell on past the water into the land around, and dry terrain

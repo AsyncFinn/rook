@@ -12,7 +12,7 @@ rust-version.workspace = true
 default = ["output"]
 # The output device (`Output`, through cpal). The engine leaves it off: it
 # only needs the effects.
-output = ["dep:cpal"]
+output = ["dep:cpal", "dep:windows", "dep:windows-core"]
 
 [dependencies]
 cpal = { workspace = true, optional = true }
@@ -23,6 +23,12 @@ rustc-hash.workspace = true
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { workspace = true, features = ["Win32_System_Threading"] }
+windows = { workspace = true, optional = true, features = [
+    "Win32_Foundation",
+    "Win32_Media_Audio",
+    "Win32_System_Com",
+] }
+windows-core = { workspace = true, optional = true }
 
 [lints]
 workspace = true

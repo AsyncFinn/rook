@@ -26,6 +26,8 @@ cutoff dot 0.170,0.000 0.000
 cutoff dot 0.000,0.170 0.000
 cutoff nil false Argument 1 missing or nil
 cutoff number false Expected table argument, got number
+cutoff terrain Water false
+cutoff terrain Rock true
 obscuring p1 [Near1,Far1]
 obscuring p2 [Near2,Far2]
 obscuring p1 p2 [Near1,Far1,Near2,Far2]

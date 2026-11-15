@@ -229,7 +229,29 @@ impl Mesher<'_> {
     }
 
     fn inside(&self, p: IVec3) -> bool {
-        self.pass.inside(self.block.at(p))
+        let v = self.block.at(p);
+        self.pass.inside(v) && !(self.pass == Pass::Water && self.rests_on_water(p, v))
+    }
+
+    /// Water only: whether `v`, voxel `p`, is dry land lying on water and
+    /// touching it nowhere else. The water's surface runs on under it, as
+    /// if it were air (measured in Studio: flat under a dry voxel of any
+    /// occupancy on a water layer's top, where counting it as inside
+    /// left a hole down to the floor); land beside water or under it
+    /// still counts as inside, so shores meet it without a face.
+    fn rests_on_water(&self, p: IVec3, v: Voxel) -> bool {
+        if !v.is_solid() || v.water > 0 {
+            return false;
+        }
+        let wet = |q: IVec3| {
+            q.cmpge(IVec3::ZERO).all()
+                && q.cmplt(IVec3::splat(SPAN)).all()
+                && self.block.at(q).is_wet()
+        };
+        wet(p - IVec3::Y)
+            && ![IVec3::X, IVec3::NEG_X, IVec3::Z, IVec3::NEG_Z, IVec3::Y]
+                .iter()
+                .any(|&d| wet(p + d))
     }
 
     fn vertex(&mut self, c: IVec3) -> u32 {
