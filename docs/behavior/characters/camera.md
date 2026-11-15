@@ -43,6 +43,16 @@ in `rook-lua`'s `api/methods/camera/moves.rs`, `Player:Move` in
   a member Rook lacks stops them with an error, as it would a place's own
   copy.
 
+## The camera before spawning
+
+- Camera isn't replicated: each client makes its own current camera as it
+  joins. Before a character spawns it's Fixed with no `CameraSubject`, its
+  Focus at (0, 0, -5) and its CFrame 12.5 studs back from it, 45° down
+  (at (0, 8.839, 3.839)), `FieldOfView` 70. Mouse and key input don't
+  move it (Observed).
+- `Instance.new("Camera")` starts elsewhere: Fixed at (0, 20, 20), Focus
+  (0, 0, -5).
+
 ## The camera after spawning
 
 - After `CharacterAdded` on the client, the current camera's
@@ -204,9 +214,12 @@ in `rook-lua`'s `api/methods/camera/rays.rs` (roll, near plane),
   does to the window, and `LocalTransparencyModifier` in drawing.
   `RunService:BindToRenderStep` and ContextActionService were there.
 - `rook-player` draws from `Workspace.CurrentCamera` while a script drives
-  it: a Scriptable camera, or the player's character with a PlayerModule
-  or `CameraScript` in PlayerScripts. Otherwise its own flying camera
-  moves, as before, and gives the game its CFrame.
+  it: a Scriptable camera, or a player with a PlayerModule or
+  `CameraScript` in PlayerScripts, character or not, so a client waiting
+  to spawn shows its Fixed camera as Studio does, made where Studio's
+  client makes it (it was a new Camera's (0, 20, 20)). Otherwise its own flying
+  camera moves, as before, and gives the game its CFrame. Test:
+  `a_client_draws_its_camera_before_its_character_spawns`.
 - The window holds the mouse as `MouseBehavior` says, unless a shown
   GuiButton is `Modal` or a TextBox has focus (Inference: typing frees it),
   and only while it's focused. GUI keeps the buttons with `Modal` set as

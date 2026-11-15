@@ -5,6 +5,7 @@ Every release, newest first. How versions are numbered is in
 
 ## [Unreleased]
 
+- While a place loads and before your character spawns, the window shows the game's camera, still, as Roblox does. Rook flew its own free camera until the character appeared. See [the camera before spawning](docs/behavior/characters/camera.md#the-camera-before-spawning).
 - Water stays whole under dry terrain lying on it, as in Studio. Rook cut a hole in the water under each such voxel, showing the ground below. See [water](docs/behavior/terrain/water.md#shorelines).
 - A camera that moves in front of what blocks its view looks through terrain water, as in Roblox. Rook's `Camera:GetLargestCutoffDistance` stopped at water, so legacy camera scripts pulled the camera in close whenever water lay between it and the character. See [camera methods](docs/behavior/characters/camera.md#camera-methods).
 - Sound follows the system's output devices on Windows: when the device in use is unplugged it moves to the new default, when it comes back it plays there again, and the settings menu lists the devices there are now. Rook went silent until the player picked another device in settings and then switched back. See [user settings](docs/behavior/user-settings.md).

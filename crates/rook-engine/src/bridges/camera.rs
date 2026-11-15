@@ -73,9 +73,11 @@ fn camera_ids() -> &'static CameraIds {
 
 impl DataModel {
     /// The current camera's view when a script drives it: a Scriptable
-    /// camera, or the local player's character with a camera script in
-    /// PlayerScripts (Roblox's PlayerModule or a place's own CameraScript).
-    /// Otherwise the window flies its own camera.
+    /// camera, or a local player with a camera script in PlayerScripts
+    /// (Roblox's PlayerModule or a place's own CameraScript), character or
+    /// not: before one spawns the camera stays Fixed where the client made
+    /// it, and input doesn't move it (measured). Otherwise the window flies
+    /// its own camera.
     pub fn scripted_camera(&self) -> Option<CameraView> {
         let camera = self.current_camera()?;
         let w = self.runtime.world();
@@ -83,14 +85,13 @@ impl DataModel {
         let ids = camera_ids();
         let cframe_of = |property| dom.read_property(camera, property, Value::as_cframe);
         let scriptable = dom.enum_item(camera, ids.camera_type) == Some("Scriptable");
-        let followed = dom.local_player().is_some_and(|p| {
+        let played = dom.local_player().is_some_and(|p| {
             let scripts = dom.find_first_child(p, "PlayerScripts", false);
             let has =
                 |name| scripts.is_some_and(|s| dom.find_first_child(s, name, false).is_some());
-            dom.ref_property(p, "Character").is_some()
-                && (has("PlayerModule") || has("CameraScript"))
+            has("PlayerModule") || has("CameraScript")
         });
-        (scriptable || followed).then(|| {
+        (scriptable || played).then(|| {
             let drawn = dom.drawn_cframe(camera).unwrap_or(CFrame::IDENTITY);
             let cframe = rook_lua::rolled(drawn, w.camera_roll(camera));
             // Drawn moved with its subject, Focus with it.
