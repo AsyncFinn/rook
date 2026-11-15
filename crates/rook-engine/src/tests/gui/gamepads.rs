@@ -1,4 +1,4 @@
-use super::*;
+use crate::tests::*;
 use crate::{GamepadAxis, GamepadKind};
 use rook_types::GamepadKey;
 

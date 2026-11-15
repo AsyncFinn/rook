@@ -1,4 +1,4 @@
-use super::*;
+use crate::tests::*;
 
 #[test]
 fn session_join_runs_local_scripts_where_roblox_does() {

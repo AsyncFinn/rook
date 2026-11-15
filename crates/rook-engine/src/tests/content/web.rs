@@ -8,7 +8,7 @@ use std::sync::mpsc::{Receiver, channel};
 
 use rook_platform::endpoints::Endpoints;
 
-use super::*;
+use crate::tests::*;
 
 /// A web server on a free local port answering each request with
 /// `answer(its base URL, path)`; each request comes out of the receiver

@@ -1,4 +1,4 @@
-use super::*;
+use crate::tests::*;
 
 /// PreloadAsync on a client, as observed in Studio: instances stand for
 /// their (and their descendants') content, strings load as images,

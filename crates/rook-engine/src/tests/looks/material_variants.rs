@@ -1,7 +1,7 @@
 //! MaterialVariants and MaterialService overrides redraw only the parts
 //! (and terrain) that can draw them.
 
-use super::*;
+use crate::tests::*;
 
 /// A variant's change redraws the parts of its base material asking for
 /// it by name; once MaterialService's override names it, the plain parts

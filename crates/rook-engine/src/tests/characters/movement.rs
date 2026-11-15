@@ -3,7 +3,7 @@
 //! LocalScript on the client that simulates them, standing on a
 //! baseplate whose top is at 0.
 
-use super::*;
+use crate::tests::*;
 
 /// A baseplate, then `setup`'s parts (a server Script's source).
 const FLOOR: &str = r#"local b = Instance.new("Part")

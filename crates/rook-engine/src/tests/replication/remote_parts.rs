@@ -1,7 +1,7 @@
 //! Parts the server simulates, as a client shows them
 //! (docs/behavior/replication.md#physics).
 
-use super::*;
+use crate::tests::*;
 
 /// Measured in Studio: a client shows a part the server moves at a steady
 /// 10 studs/s moving every frame by its speed times the frame, about

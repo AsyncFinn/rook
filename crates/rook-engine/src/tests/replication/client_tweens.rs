@@ -2,7 +2,7 @@
 //! on their clients do: the server fires a RemoteEvent and a LocalScript
 //! the player's character got from StarterCharacterScripts tweens the door.
 
-use super::*;
+use crate::tests::*;
 
 fn door_x(dm: &DataModel) -> f32 {
     let world = dm.runtime().world();

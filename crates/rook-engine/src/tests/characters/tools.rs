@@ -1,4 +1,4 @@
-use super::*;
+use crate::tests::*;
 
 /// A Tool with a Handle in StarterPack, which every player's Backpack
 /// gets, with a server Script printing its events.

@@ -1,6 +1,6 @@
 //! TextChatService messages as a client sees them.
 
-use super::*;
+use crate::tests::*;
 
 /// A game colors names in `OnIncomingMessage`. The sender's own copy is
 /// colored before `SendAsync` returns, the chat window's first look at it,

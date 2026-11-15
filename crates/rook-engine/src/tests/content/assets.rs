@@ -1,7 +1,7 @@
 //! Published models scripts load: `require(assetId)` and
 //! `InsertService:LoadAsset`, fetched through the content loader.
 
-use super::*;
+use crate::tests::*;
 
 /// A model file holding the given `(class, name, source)` instances.
 fn model_file(items: &[(&str, &str, &str)]) -> Vec<u8> {

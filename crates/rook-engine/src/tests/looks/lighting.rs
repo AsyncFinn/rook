@@ -1,6 +1,6 @@
 //! Scripts changing how the sky and lighting look reach the renderer.
 
-use super::*;
+use crate::tests::*;
 
 /// Lighting's properties and its children's (a Sky arriving, changing or
 /// leaving) mark the lighting as changed; instances elsewhere don't.

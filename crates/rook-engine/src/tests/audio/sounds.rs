@@ -1,7 +1,7 @@
 //! Sounds across a play session: what the client (the DataModel a player
 //! window shows and hears) loads and plays.
 
-use super::*;
+use crate::tests::*;
 
 /// Options whose install holds a real 1 s WAV at `sounds/tone.wav`.
 pub(super) fn tone_options(name: &str) -> Options {

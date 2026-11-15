@@ -3,7 +3,7 @@
 //! by distance.
 
 use super::sounds::tone_options;
-use super::*;
+use crate::tests::*;
 
 #[test]
 fn client_graph_listeners_and_analyzers() {

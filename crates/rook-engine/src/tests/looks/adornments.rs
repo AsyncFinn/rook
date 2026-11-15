@@ -1,4 +1,4 @@
-use super::*;
+use crate::tests::*;
 
 /// Moving a SelectionBox to another Adornee redraws both parts'
 /// adornments: the old one loses its box, the new one gains it. Their own

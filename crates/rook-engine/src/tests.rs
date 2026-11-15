@@ -229,30 +229,12 @@ fn position(dm: &DataModel, part: InstanceId) -> glam::Vec3 {
         .position
 }
 
-mod adornments;
-mod assets;
-mod audio_api;
+mod audio;
 mod characters;
-mod client_tweens;
 mod collect;
-mod context_actions;
-mod effects;
-mod explosions;
-mod gamepads;
+mod content;
 mod gui;
-mod legacy_chat;
-mod lighting_look;
-mod material_variants;
-mod movement;
-mod preload;
-mod prompts;
-mod remote_parts;
+mod looks;
+mod replication;
 mod scripts;
-mod session;
-mod sounds;
 mod terrain_api;
-mod terrain_look;
-mod text_chat;
-mod tools;
-mod unions;
-mod web;

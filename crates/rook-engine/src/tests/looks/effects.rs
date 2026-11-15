@@ -1,4 +1,4 @@
-use super::*;
+use crate::tests::*;
 
 /// A server script's `ParticleEmitter:Emit` reaches the client's
 /// renderer, even on an emitter made in the same frame; in Run mode the

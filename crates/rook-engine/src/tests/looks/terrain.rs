@@ -1,6 +1,6 @@
 //! Scripts changing how the terrain looks reach the renderer.
 
-use super::*;
+use crate::tests::*;
 
 /// The Terrain's water properties and `Workspace.GlobalWind` mark the
 /// terrain's look as changed; other properties of Workspace don't.

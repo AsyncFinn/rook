@@ -1,4 +1,4 @@
-use super::*;
+use crate::tests::*;
 
 /// The blast as measured in Studio 0.742 (docs/behavior/effects/explosions.md):
 /// parts whose surface it reaches are hit with their center's distance,

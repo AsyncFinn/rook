@@ -1,7 +1,7 @@
 //! The legacy chat's install with no Roblox file to fill it in: what a place
 //! saves in the Chat service goes where it runs.
 
-use super::*;
+use crate::tests::*;
 
 /// A place with its own runner and chat script saved in Chat, whose first
 /// server script waits on the runner as games do.

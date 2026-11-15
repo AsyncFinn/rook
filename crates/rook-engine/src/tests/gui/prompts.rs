@@ -1,4 +1,4 @@
-use super::*;
+use crate::tests::*;
 
 /// The client's character stands anchored at the origin and the camera
 /// looks down +Z from it, so prompts' screen points are known.
