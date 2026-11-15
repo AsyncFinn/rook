@@ -1,3 +1,4 @@
+use super::pacer::{MAX_PROBE_WAIT, PROBE};
 use super::*;
 
 /// A 144 Hz player whose mouse turns the camera a step each frame: the
