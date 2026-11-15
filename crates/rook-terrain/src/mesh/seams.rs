@@ -5,7 +5,7 @@
 
 use glam::{IVec3, Vec3};
 use rustc_hash::FxHashMap;
-use spade::handles::{FixedDirectedEdgeHandle, FixedFaceHandle, FixedVertexHandle};
+use spade::handles::{FixedDirectedEdgeHandle, FixedVertexHandle};
 use spade::{ConstrainedDelaunayTriangulation, Point2, Triangulation};
 
 use super::clip::{Plane, box_planes};
@@ -127,8 +127,7 @@ impl Mesher<'_> {
             // Finite corners always insert.
             let _ = cdt.insert(Point2::new(p[0], p[1]));
         }
-        let mut lines: Vec<(FixedVertexHandle, FixedVertexHandle, Ring, Option<[u32; 2]>)> =
-            Vec::new();
+        let mut lines: Vec<Line> = Vec::new();
         for (ring, ends) in [(Ring::Finer, fine), (Ring::Coarser, &coarse[..])] {
             for e in ends.iter() {
                 let mut handles = [None; 2];
@@ -150,26 +149,7 @@ impl Mesher<'_> {
         for &(a, b, _, _) in &lines {
             cdt.add_constraint_and_split(a, b, |p| p);
         }
-        // Each constraint edge's outlines, by the sum of their directions
-        // along its first directed edge.
-        let mut along: FxHashMap<FixedDirectedEdgeHandle, [i8; 2]> = FxHashMap::default();
-        let mut splits: Vec<([u32; 2], Vec<FixedVertexHandle>)> = Vec::new();
-        for &(a, b, ring, vertices) in &lines {
-            let path = walk(&cdt, a, b);
-            for w in path.windows(2) {
-                let Some(e) = cdt.get_edge_from_neighbors(w[0], w[1]) else {
-                    continue;
-                };
-                let first = e.as_undirected().as_directed();
-                let sign = if first.fix() == e.fix() { 1 } else { -1 };
-                along.entry(first.fix()).or_default()[ring as usize] += sign;
-            }
-            if let Some(v) = vertices
-                && path.len() > 2
-            {
-                splits.push((v, path[1..path.len() - 1].to_vec()));
-            }
-        }
+        let (along, splits) = trace(&cdt, &lines);
         let states = [Ring::Finer, Ring::Coarser].map(|ring| {
             fill(&cdt, &along, ring).unwrap_or_else(|| {
                 let solid = self.uniform(coarser, chunk, dir, ring);
@@ -353,6 +333,45 @@ fn coarse_ends(coarser: &Grid, chunk: IVec3, level: u8, dir: IVec3, scale: f32) 
         .collect()
 }
 
+/// An outline's edge between two of the triangulation's vertices, of
+/// `ring`, and the finer chunk's own vertices at its ends if it has them.
+type Line = (FixedVertexHandle, FixedVertexHandle, Ring, Option<[u32; 2]>);
+
+/// Each constraint edge's outlines' sums, by ring ([`trace`]).
+type Sums = FxHashMap<FixedDirectedEdgeHandle, [i8; 2]>;
+
+/// One of the finer chunk's edges, by its two vertices, and the vertices
+/// crossings split it at, in order.
+type Split = ([u32; 2], Vec<FixedVertexHandle>);
+
+/// Each constraint edge's outlines, by the sum of their directions along
+/// its first directed edge, and the chunk's own edges that crossings split,
+/// with the vertices they were split at.
+fn trace(
+    cdt: &ConstrainedDelaunayTriangulation<Point2<f64>>,
+    lines: &[Line],
+) -> (Sums, Vec<Split>) {
+    let mut along = Sums::default();
+    let mut splits = Vec::new();
+    for &(a, b, ring, vertices) in lines {
+        let path = walk(cdt, a, b);
+        for w in path.windows(2) {
+            let Some(e) = cdt.get_edge_from_neighbors(w[0], w[1]) else {
+                continue;
+            };
+            let first = e.as_undirected().as_directed();
+            let sign = if first.fix() == e.fix() { 1 } else { -1 };
+            along.entry(first.fix()).or_default()[ring as usize] += sign;
+        }
+        if let Some(v) = vertices
+            && path.len() > 2
+        {
+            splits.push((v, path[1..path.len() - 1].to_vec()));
+        }
+    }
+    (along, splits)
+}
+
 /// The vertices along the constraint from `a` to `b`, which crossings
 /// with other constraints may have split.
 fn walk(
@@ -386,56 +405,88 @@ fn walk(
     path
 }
 
-/// Which faces `ring` holds solid, from the sides of its outline's edges
-/// (its solid lies right of the finer ring's edges, left of the coarser
-/// ring's, seen from the finer side's outside), carried across the edges
-/// that aren't its own. `None` when its outline doesn't cross the side.
+/// Which faces `ring` holds solid, by the winding number of its outline
+/// around each face (the nonzero rule of polygon fills): its solid lies
+/// right of the finer ring's edges and left of the coarser ring's, seen
+/// from the finer side's outside, so crossing one of its edges steps the
+/// count up or down. `None` when its outline doesn't cross the side.
+///
+/// Counting rather than marking each edge's two sides solid and air keeps
+/// an outline that crosses itself to its own faces: a surface folded
+/// over (Rock's shifted vertices on a thin spike) cuts the plane in a
+/// figure eight whose small loop runs backwards, and marking that loop's
+/// outside solid would carry solid across the whole empty side.
 fn fill(
     cdt: &ConstrainedDelaunayTriangulation<Point2<f64>>,
-    along: &FxHashMap<FixedDirectedEdgeHandle, [i8; 2]>,
+    along: &Sums,
     ring: Ring,
 ) -> Option<Vec<Option<bool>>> {
     let r = ring as usize;
-    let mut state: Vec<Option<bool>> = vec![None; cdt.num_all_faces()];
-    let mut queue: Vec<FixedFaceHandle<spade::handles::PossiblyOuterTag>> = Vec::new();
-    for (&e, sums) in along {
-        let sign = sums[r];
-        if sign == 0 {
-            continue;
-        }
+    // Crossing an edge from its left to its right changes the count by
+    // this times the ring's sum along it.
+    let step = match ring {
+        Ring::Coarser => -1,
+        Ring::Finer => 1,
+    };
+    // The ring's sum along `e`, walked as `e` runs.
+    let sum = |e: FixedDirectedEdgeHandle| -> i32 {
         let edge = cdt.directed_edge(e);
-        // Left of the edge as walked: solid for the coarser ring.
-        let left = (sign > 0) == (ring == Ring::Coarser);
-        for (face, solid) in [(edge.face(), left), (edge.rev().face(), !left)] {
-            if face.is_outer() {
-                continue;
-            }
-            let slot = &mut state[face.fix().index()];
-            if slot.is_none() {
-                *slot = Some(solid);
-                queue.push(face.fix());
-            }
-        }
-    }
-    if queue.is_empty() {
+        let first = edge.as_undirected().as_directed();
+        let s = along.get(&first.fix()).map_or(0, |s| i32::from(s[r]));
+        if first.fix() == e { s } else { -s }
+    };
+    if !along.values().any(|s| s[r] != 0) {
         return None;
     }
+    // The count around each face, from the first: the side is one square,
+    // so every inner face is reached.
+    let mut winding: Vec<Option<i32>> = vec![None; cdt.num_all_faces()];
+    let start = cdt.inner_faces().next()?.fix();
+    winding[start.index()] = Some(0);
+    let mut queue = vec![start];
     while let Some(f) = queue.pop() {
-        let solid = state[f.index()];
-        for e in cdt.face(f).as_inner()?.adjacent_edges() {
-            let own = along
-                .get(&e.as_undirected().as_directed().fix())
-                .is_some_and(|s| s[r] != 0);
-            let next = e.rev().face();
-            if own || next.is_outer() {
+        let w = winding[f.index()]?;
+        for e in cdt.face(f).adjacent_edges() {
+            let Some(next) = e.rev().face().as_inner() else {
                 continue;
-            }
-            let slot = &mut state[next.fix().index()];
+            };
+            let slot = &mut winding[next.fix().index()];
             if slot.is_none() {
-                *slot = solid;
+                *slot = Some(w + step * sum(e.fix()));
                 queue.push(next.fix());
             }
         }
     }
-    Some(state)
+    // The count outside the ring's solid: what most of its outline, by
+    // length, has on its empty side. An outline that never crosses itself
+    // agrees all along; a backwards loop is outvoted.
+    let mut votes: FxHashMap<i32, f64> = FxHashMap::default();
+    for (&e, sums) in along {
+        if sums[r] == 0 {
+            continue;
+        }
+        let edge = cdt.directed_edge(e);
+        let (left, right) = (edge.face(), edge.rev().face());
+        let counts = match (left.is_outer(), right.is_outer()) {
+            (false, _) => winding[left.fix().index()].map(|w| (w, w + step * sum(e))),
+            (true, false) => winding[right.fix().index()].map(|w| (w - step * sum(e), w)),
+            (true, true) => None,
+        };
+        if let Some((a, b)) = counts {
+            *votes.entry(a.min(b)).or_default() += edge.length_2().sqrt();
+        }
+    }
+    let outside = votes
+        .into_iter()
+        .max_by(|a, b| a.1.total_cmp(&b.1).then(b.0.cmp(&a.0)))?
+        .0;
+    Some(
+        winding
+            .into_iter()
+            .map(|w| w.map(|w| w > outside))
+            .collect(),
+    )
 }
+
+#[cfg(test)]
+mod tests;
