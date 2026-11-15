@@ -1,6 +1,7 @@
 //! Which journal entries can move or change GUI, and which only change
 //! how it looks.
 
+use crate::*;
 use rook_dom::{Change, Dom, InstanceId};
 use rook_reflection::{ClassId, PropertyId};
 
@@ -257,5 +258,165 @@ impl Watch {
             .into_iter()
             .flatten()
             .any(|c| db.is_a(inst.class, c))
+    }
+}
+
+impl Gui {
+    /// Look at the journal since last time, so it can be trimmed.
+    pub fn note_changes(&mut self, dom: &Dom) {
+        if self.watch.is_none() {
+            self.watch = Some(Watch::new(dom));
+            self.modals.seed(dom);
+            if let Some(ws) = dom.find_service("Workspace") {
+                let found = dom.descendants(ws);
+                (self.overheads).note(dom, found.iter().copied());
+                self.in_world
+                    .extend(found.into_iter().filter(|&id| world::is_world_gui(dom, id)));
+            }
+            let player_gui =
+                (dom.local_player()).and_then(|p| dom.find_first_child_of_class(p, "PlayerGui"));
+            if let Some(pg) = player_gui {
+                let found = dom.descendants(pg).into_iter();
+                self.in_world
+                    .extend(found.filter(|&id| world::is_world_gui(dom, id)));
+            }
+            let holders = (dom.find_service("Workspace").into_iter()).chain(
+                dom.find_service("Players")
+                    .map_or(Vec::new(), |p| dom.children(p).to_vec()),
+            );
+            let held: Vec<InstanceId> = holders.flat_map(|h| dom.children(h).to_vec()).collect();
+            self.messages
+                .extend(held.into_iter().filter(|&id| draw::is_message(dom, id)));
+        }
+        let changes = dom.journal().since(self.cursor);
+        rook_types::count!(JournalReadGui, changes.len());
+        for change in changes {
+            if let Change::Collected(id) = change {
+                self.world_listed += 1;
+                self.forget(*id);
+                continue;
+            }
+            self.modals.note(dom, change);
+            if let Change::Reparented { subtree, .. } = change {
+                // A GUI, or the part one hangs on, may have come or gone.
+                self.world_listed += 1;
+                self.overheads.note(dom, subtree.iter().copied());
+                let messages = subtree
+                    .iter()
+                    .copied()
+                    .filter(|&id| draw::is_message(dom, id));
+                self.messages.extend(messages);
+                let found = subtree.iter().copied();
+                self.in_world
+                    .extend(found.filter(|&id| world::is_world_gui(dom, id)));
+            }
+            if !self.stale {
+                let watch = self.watch.as_ref().expect("made above");
+                let touch = watch.touches(dom, change);
+                match (touch, change) {
+                    (Touch::Nothing, _) => {}
+                    (Touch::Tree, Change::Reparented { subtree, .. }) => {
+                        rook_types::count!(GuiObjectsChanged, subtree.len());
+                    }
+                    _ => rook_types::count!(GuiObjectsChanged, 1),
+                }
+                match (touch, change) {
+                    (Touch::All, _) => self.stale = true,
+                    (
+                        Touch::Tree,
+                        Change::Reparented {
+                            old_parent,
+                            old_ancestors,
+                            subtree,
+                            ..
+                        },
+                    ) => self.moved.push(Moved {
+                        left: *old_parent,
+                        old_top: layout::top_along(dom, old_ancestors.iter().copied()),
+                        subtree: subtree.clone(),
+                    }),
+                    (Touch::Layout, Change::Property { id, .. }) => _ = self.changed.insert(*id),
+                    (Touch::Place, Change::Property { id, .. }) => _ = self.shifted.insert(*id),
+                    (Touch::Content, Change::Property { id, .. }) => {
+                        self.shifted.insert(*id);
+                        self.restyled.insert(*id);
+                    }
+                    (Touch::Look, Change::Property { id, .. }) => _ = self.restyled.insert(*id),
+                    (Touch::Text, Change::Property { id, .. }) => _ = self.retexted.insert(*id),
+                    _ => {}
+                }
+            }
+        }
+        self.cursor = dom.journal().end();
+    }
+
+    /// Take the GUI that moved in the tree out of where it was laid out.
+    /// The objects it left and joined, when laid out, are placed again
+    /// (from the nearest one whose place doesn't depend on what they
+    /// hold, see [`layout::Layout::alone`]) and drawn again; returns the
+    /// trees to lay out again whole: those it left or joined at the top
+    /// that are laid out (a screen's, or a client's world GUI).
+    pub(crate) fn take_moved(&mut self, dom: &Dom) -> Vec<InstanceId> {
+        let moved = std::mem::take(&mut self.moved);
+        if moved.is_empty() {
+            return Vec::new();
+        }
+        // What shows, and what input reaches, may have changed.
+        self.laid_out += 1;
+        self.world_listed += 1;
+        let client = dom.local_player().is_some();
+        let mut trees = FxHashSet::default();
+        for Moved {
+            left,
+            old_top,
+            subtree,
+        } in moved
+        {
+            let ids: FxHashSet<InstanceId> = subtree.iter().copied().collect();
+            self.layout.drop(&ids);
+            for &id in &subtree {
+                // A ScreenGui or world GUI that came or went.
+                if dom.is_a(id, "LayerCollector") {
+                    self.screen.restack(id);
+                }
+                self.canvases.remove(&id);
+                if draw::is_message(dom, id) {
+                    self.screen.repaint_messages();
+                }
+            }
+            self.in_world
+                .retain(|&id| !ids.contains(&id) || world::held_where_drawn(dom, id));
+            self.messages
+                .retain(|&id| !ids.contains(&id) || dom.parent(id).is_some());
+            let placed =
+                |id: InstanceId| self.layout.placed.contains_key(&id) && dom.is_a(id, "GuiObject");
+            // The object it left, or the tree, if that's still laid out.
+            match left.filter(|&p| placed(p)) {
+                Some(p) => _ = self.shifted.insert(p),
+                None => trees.extend(old_top.filter(|top| self.layout.placed.contains_key(top))),
+            }
+            let Some(&root) = subtree.first() else {
+                continue;
+            };
+            match dom.parent(root).filter(|&p| placed(p)) {
+                Some(p) => _ = self.shifted.insert(p),
+                None => trees.extend(layout::top_of(dom, root).filter(|&top| {
+                    layout::on_screen(dom, top) || client && self.in_world.contains(&top)
+                })),
+            }
+            // The objects it left and joined stack again with what they
+            // hold now, placed again above or with their trees, but a
+            // ScreenGui stacking by ZIndex alone spreads what an object
+            // holds through its stack, so it stacks again whole. What it
+            // held drew with it (a UICorner, a UIStroke).
+            for top in old_top.into_iter().chain(layout::top_of(dom, root)) {
+                if !order::by_sibling(dom, top) {
+                    self.screen.restack(top);
+                }
+            }
+            self.restyled
+                .extend(left.into_iter().chain(dom.parent(root)));
+        }
+        trees.into_iter().collect()
     }
 }

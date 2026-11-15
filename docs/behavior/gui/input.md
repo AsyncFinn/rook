@@ -12,13 +12,13 @@ decisive orders; Rook passes all five. `input/world_gui_overlap`, the
 screen over a SurfaceGui, was recorded the same way in Studio 0.747 on
 2026-11-13, and Rook passes it too.
 
-Code: hit-testing in `rook-gui` (`hits.rs`, walking `order.rs`, the
-draw order), the wheel and bar drags in `scroll_input.rs`, tints and
+Code: hit-testing in `rook-gui` (`input/hits.rs`, walking `order.rs`, the
+draw order), the wheel and bar drags in `input/scrolling.rs`, tints and
 hover images in `draw/frame.rs` and `draw/image.rs`, the caret in
 `draw/caret.rs`; the events in `rook-engine/src/bridges/input/`
 (`gui.rs`, `textbox.rs`); TextBox focus in
 `rook-lua/src/api/methods/gui/textbox.rs`, lost to a move in
-`rook-lua/src/threads.rs` (`dispatch`).
+`rook-lua/src/threads/firing.rs` (`dispatch`).
 
 ## Coordinates
 

@@ -22,6 +22,7 @@ mod style;
 mod text;
 mod viewport;
 
+use crate::*;
 use glam::Vec2;
 use rook_dom::{Dom, InstanceId};
 use rook_types::{GuiQuad, WorldCanvas};
@@ -200,4 +201,70 @@ fn touches(p: Placed, area: [f32; 4]) -> bool {
     let reach = corners[0].max(corners[1]);
     let (lo, hi) = (p.center - reach, p.center + reach);
     lo.x <= area[2] && lo.y <= area[3] && hi.x >= area[0] && hi.y >= area[1]
+}
+
+impl Gui {
+    pub(crate) fn redraw(&mut self, dom: &Dom, tops: &[InstanceId]) {
+        if tops.is_empty() {
+            return;
+        }
+        self.laid_out += 1;
+        for &top in tops {
+            if world::is_world_gui(dom, top) {
+                // How it hangs was read again with its layout.
+                self.canvases.remove(&top);
+                self.world_stale.insert(top);
+                self.world_rehung.insert(top);
+            } else {
+                self.screen.restack(top);
+            }
+        }
+    }
+
+    /// Draw `ids` again, placed again on their own (`placed`, with what
+    /// they hold) or only restyled; a world GUI's whole canvas.
+    pub(crate) fn repaint(&mut self, dom: &Dom, ids: &[InstanceId], placed: bool) {
+        if ids.is_empty() {
+            return;
+        }
+        self.laid_out += 1;
+        for &id in ids {
+            if draw::is_message(dom, id) {
+                self.screen.repaint_messages();
+                continue;
+            }
+            match layout::top_of(dom, id) {
+                Some(top) if world::is_world_gui(dom, top) => {
+                    self.canvases.remove(&top);
+                    self.world_stale.insert(top);
+                    // Its own properties say whether it draws; what it
+                    // holds only what its canvas shows.
+                    if id == top {
+                        self.world_rehung.insert(top);
+                    }
+                }
+                Some(_) if placed => self.screen.placed(id),
+                Some(_) => self.screen.repaint(id),
+                None => {}
+            }
+        }
+    }
+
+    /// What the local player's ScreenGuis draw, bottom first, as of the
+    /// last layout: in pieces, one per object, each the same `Arc` until
+    /// what it draws changes, so a renderer can keep what it made of it.
+    pub fn draw(&mut self, dom: &Dom) -> Arc<[Arc<[GuiQuad]>]> {
+        let mut text = draw::Text {
+            fonts: &mut self.fonts,
+            glyphs: &mut self.glyphs,
+        };
+        let (layout, messages) = (&self.layout, &self.messages);
+        (self.screen).draw(
+            dom,
+            layout,
+            (&mut text, &mut self.images),
+            self.focus,
+            messages,
+        )
+    }
 }
