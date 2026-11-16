@@ -167,14 +167,24 @@ impl ConditionalEventHandler for Enter {
     }
 }
 
+/// Ctrl+C clears what's typed, all its lines, and does nothing on an
+/// empty prompt: Ctrl+C is also what people press to copy a line of
+/// output, and ending input there closed the command bar for good (Ctrl+D
+/// still ends it).
 #[derive(Debug)]
 struct Interrupt;
 
 impl ConditionalEventHandler for Interrupt {
-    /// Ctrl+C clears what's typed, all its lines; on an empty prompt it
-    /// ends input as usual.
     fn handle(&self, _: &Event, _: RepeatCount, _: bool, ctx: &EventContext) -> Option<Cmd> {
-        (!ctx.line().is_empty()).then_some(Cmd::Kill(Movement::WholeBuffer))
+        Some(interrupt(ctx.line()))
+    }
+}
+
+fn interrupt(line: &str) -> Cmd {
+    if line.is_empty() {
+        Cmd::Noop
+    } else {
+        Cmd::Kill(Movement::WholeBuffer)
     }
 }
 
@@ -189,5 +199,11 @@ mod tests {
         assert!(!clock.press(start));
         assert!(clock.press(start + Duration::from_millis(1)));
         assert!(!clock.press(start + Duration::from_millis(200)));
+    }
+
+    #[test]
+    fn ctrl_c_on_an_empty_prompt_keeps_it_open() {
+        assert_eq!(interrupt(""), Cmd::Noop);
+        assert_eq!(interrupt("x"), Cmd::Kill(Movement::WholeBuffer));
     }
 }

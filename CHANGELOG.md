@@ -6,6 +6,7 @@ Every release, newest first. How versions are numbered is in
 ## [Unreleased]
 
 - Ctrl shortcuts in a TextBox (select all, copy, cut, paste) no longer type their letter, and the caret blinks in Roblox's mid gray. Rook typed the letter along with the shortcut, and drew a steady caret in the text's color. See [TextBox](docs/behavior/gui/input.md#textbox).
+- Ctrl+C on an empty command-line prompt does nothing, so copying output with it no longer closes the prompt. Rook ended input there, and the prompt was gone for the rest of the run. See [getting started](docs/guide/getting-started.md).
 - Images that show a Roblox thumbnail load as in Studio: `rbxthumb://` and the old asset and avatar thumbnail URLs draw their icon or headshot, and `Players:GetUserThumbnailAsync` returns the thumbnail and whether it's ready. Rook drew nothing for them and raised an error for `GetUserThumbnailAsync`. See [thumbnails](docs/behavior/content/thumbnails.md).
 - While a place loads and before your character spawns, the window shows the game's camera, still, as Roblox does. Rook flew its own free camera until the character appeared. See [the camera before spawning](docs/behavior/characters/camera.md#the-camera-before-spawning).
 - Water stays whole under dry terrain lying on it, as in Studio. Rook cut a hole in the water under each such voxel, showing the ground below. See [water](docs/behavior/terrain/water.md#shorelines).
