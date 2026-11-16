@@ -10,7 +10,7 @@ use rustc_hash::{FxHashMap, FxHashSet};
 
 use super::objects::group;
 use super::overlays::messages;
-use super::{Draw, Text};
+use super::{Draw, Focus, Text};
 use crate::images::Images;
 use crate::layout::{GUI_INSET, Layout, top_of};
 use crate::order::{self, Clip, Stacked};
@@ -125,7 +125,7 @@ impl Screen {
         dom: &Dom,
         layout: &Layout,
         (text, images): (&mut Text<'_>, &mut Images),
-        focus: Option<InstanceId>,
+        focus: Option<Focus>,
         messages: &FxHashSet<InstanceId>,
     ) -> Arc<[Arc<[GuiQuad]>]> {
         if let Some(drawn) = &self.drawn {

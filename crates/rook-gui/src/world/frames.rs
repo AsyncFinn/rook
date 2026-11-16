@@ -72,6 +72,7 @@ impl Gui {
         };
         fresh.sort_unstable();
         let missing: Vec<InstanceId> = fresh.iter().map(|&i| self.world_drawn[i].gui).collect();
+        let focus = self.drawn_focus();
         let mut text = draw::Text {
             fonts: &mut self.fonts,
             glyphs: &mut self.glyphs,
@@ -82,7 +83,7 @@ impl Gui {
             &missing,
             &mut text,
             &mut self.images,
-            self.focus,
+            focus,
         );
         let drawn: Vec<Arc<WorldCanvas>> = drawn.into_iter().map(Arc::new).collect();
         self.canvases

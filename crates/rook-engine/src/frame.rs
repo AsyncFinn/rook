@@ -100,6 +100,7 @@ impl DataModel {
         // the GUI their handlers make is drawn this frame.
         self.runtime.update_prompts();
         self.ease_scrolls();
+        self.runtime.world_mut().gui.blink_caret(dt);
         self.lay_out_gui();
         self.runtime.sync_overheads();
         self.refresh_gui_hover();

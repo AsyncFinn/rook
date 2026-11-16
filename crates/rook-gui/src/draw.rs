@@ -32,6 +32,14 @@ pub(crate) use objects::image::all_images;
 pub(crate) use overlays::messages::is_message;
 pub(crate) use screen::Screen;
 
+/// The focused TextBox: it shows its selection, and its caret while the
+/// caret's blink shows it.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(crate) struct Focus {
+    pub(crate) id: InstanceId,
+    pub(crate) caret: bool,
+}
+
 pub(crate) fn is_image(dom: &Dom, id: InstanceId) -> bool {
     matches!(dom.class_name(id), "ImageLabel" | "ImageButton")
 }
@@ -45,7 +53,7 @@ pub(crate) fn world(
     guis: &[InstanceId],
     text: &mut Text<'_>,
     images: &mut Images,
-    focus: Option<InstanceId>,
+    focus: Option<Focus>,
 ) -> Vec<WorldCanvas> {
     let mut canvases = Vec::new();
     for &gui in guis {
@@ -88,8 +96,7 @@ struct Draw<'a, 'b> {
     /// On a world GUI's canvas: text is drawn from distance fields at
     /// every size, and a ViewportFrame draws only its border (observed).
     world: bool,
-    /// The focused TextBox, which shows its caret.
-    focus: Option<InstanceId>,
+    focus: Option<Focus>,
     /// Objects wholly outside this rectangle aren't drawn (observed: on a
     /// SurfaceGui, frames spilling past the canvas drew, ones past it
     /// didn't); their contents still may be.
@@ -158,15 +165,15 @@ impl Draw<'_, '_> {
             image::emit(dom, d.id, d.placed, d.clip, self.images, out);
         }
         if let Some(laid) = self.layout.texts.get(&d.id) {
-            let focused = self.focus == Some(d.id);
+            let focused = self.focus.filter(|f| f.id == d.id);
             let (text, out) = (&mut *self.text, &mut *self.out);
-            if focused {
+            if focused.is_some() {
                 caret::selection(dom, d.id, &laid.block, d.placed, d.clip, out);
             }
             let outline = stroke::text_outline(dom, d.id, d.placed);
             let at = (d.placed, d.clip);
             text::emit(&laid.block, at, self.world, outline, text, out);
-            if focused {
+            if focused.is_some_and(|f| f.caret) {
                 caret::caret(dom, d.id, &laid.block, d.placed, d.clip, out);
             }
         }
@@ -246,17 +253,12 @@ impl Gui {
     /// last layout: in pieces, one per object, each the same `Arc` until
     /// what it draws changes, so a renderer can keep what it made of it.
     pub fn draw(&mut self, dom: &Dom) -> Arc<[Arc<[GuiQuad]>]> {
+        let focus = self.drawn_focus();
         let mut text = draw::Text {
             fonts: &mut self.fonts,
             glyphs: &mut self.glyphs,
         };
         let (layout, messages) = (&self.layout, &self.messages);
-        (self.screen).draw(
-            dom,
-            layout,
-            (&mut text, &mut self.images),
-            self.focus,
-            messages,
-        )
+        (self.screen).draw(dom, layout, (&mut text, &mut self.images), focus, messages)
     }
 }

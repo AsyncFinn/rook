@@ -166,6 +166,15 @@ hover images in `draw/objects/frame.rs` and `draw/objects/image.rs`, the caret i
   a hidden focused box.
 - **Tab** does nothing: the box stays focused. In a `MultiLine` box,
   Enter types a newline and keeps focus.
+- **Ctrl shortcuts** (select all, copy, cut, paste) type nothing: the
+  platform's text for Ctrl with a letter is a control character.
+- **The caret** (measured 2026-11-16) is one pixel column of opaque mid
+  gray (128, 128, 128) whatever `TextColor3` or the background, just right
+  of its stop, as tall as the line: `TextSize`, half as big again for
+  Legacy, whatever `LineHeight`. It blinks: shown 0.3 s, hidden 0.3 s,
+  each turn ending on the first frame at or past 0.3 s (18 or 19 frames
+  at 60 Hz, a 0.62 s blink). Moving the caret, by keys or by script, and
+  typing don't restart it. Inference: it shows as the box gains focus.
 
 ## The cursor
 

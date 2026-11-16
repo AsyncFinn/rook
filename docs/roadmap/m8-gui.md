@@ -162,7 +162,7 @@ health bars and leaderboards are GUI.
       advances (Studio's hinting); `TextTruncate`, `TextDirection`,
       `OpenTypeFeatures`, localization, real small caps and fallback
       faces; text stroke, underline, Hint and Message measured; the
-      TextBox's scrolling caret, Up and Down, blinking, composition and
+      TextBox's scrolling caret, Up and Down, composition and
       selection color; `AutomaticSize` with scaled children; the
       Inferences in the GUI pages. Out: touch and gamepad (M19).
     - *Evidence*: the [stubs](../guide/stubs.md) rows taken over by this

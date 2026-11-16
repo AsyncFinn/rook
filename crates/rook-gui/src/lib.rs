@@ -128,6 +128,7 @@ pub struct Gui {
     /// What the screen draws, in pieces kept until they change.
     screen: draw::Screen,
     focus: Option<InstanceId>,
+    blink: input::caret::Blink,
     modals: input::modal::Modals,
     /// ScrollingFrames the wheel is moving.
     scrolling: FxHashMap<InstanceId, input::scrolling::Eased>,
@@ -171,6 +172,7 @@ impl Default for Gui {
             world_fresh: None,
             screen: draw::Screen::default(),
             focus: None,
+            blink: input::caret::Blink::default(),
             modals: input::modal::Modals::default(),
             scrolling: FxHashMap::default(),
             turning: Turning::default(),
@@ -282,7 +284,16 @@ impl Gui {
         if self.focus != focus {
             self.restyled.extend(self.focus.into_iter().chain(focus));
             self.focus = focus;
+            self.blink = input::caret::Blink::default();
         }
+    }
+
+    /// The focused TextBox as drawing sees it.
+    pub(crate) fn drawn_focus(&self) -> Option<draw::Focus> {
+        (self.focus).map(|id| draw::Focus {
+            id,
+            caret: self.blink.shown,
+        })
     }
 
     /// The character a caret put at `at` (GUI coordinates) in TextBox

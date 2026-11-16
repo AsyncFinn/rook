@@ -61,8 +61,12 @@ pub(in crate::draw) fn selection(
     }
 }
 
-/// The caret, drawn over the text in its color. Inference: a pixel wide,
-/// as tall as the line, not blinking.
+/// Measured: the caret is opaque mid gray whatever the text's color.
+const CARET: [f32; 4] = [0.5, 0.5, 0.5, 1.0];
+
+/// The caret, drawn over the text while its blink shows it. Measured: the
+/// pixel column just right of the stop, as tall as the line (`TextSize`,
+/// half as big again for Legacy, whatever `LineHeight`).
 pub(in crate::draw) fn caret(
     dom: &Dom,
     id: InstanceId,
@@ -74,10 +78,6 @@ pub(in crate::draw) fn caret(
     let Some((top, height)) = index(dom, id, "CursorPosition").and_then(|i| block.caret(i)) else {
         return;
     };
-    let c = dom
-        .color3_property(id, "TextColor3")
-        .map_or([0.0; 3], |c| [c.r, c.g, c.b]);
-    let min = top - Vec2::new(0.5, 0.0);
-    let max = top + Vec2::new(0.5, height);
-    out.push(rect(p, min, max, [c[0], c[1], c[2], 1.0], clip));
+    let max = top + Vec2::new(1.0, height);
+    out.push(rect(p, top, max, CARET, clip));
 }

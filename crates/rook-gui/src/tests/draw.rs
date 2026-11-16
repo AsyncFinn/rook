@@ -655,3 +655,69 @@ fn incremental_draws(behavior: &str, mut seed: u32, steps: u32) {
         );
     }
 }
+
+/// The focused TextBox's caret is a mid gray pixel column right of its
+/// stop, as tall as the line, whatever the text's color; it shows for
+/// 0.3 s and hides for 0.3 s, each turn ending on the first frame at or
+/// past 0.3 s, and shows again on focus (Studio's answers); needs the
+/// install's fonts.
+#[test]
+fn caret_blinks_mid_gray() {
+    use rook_content::resolver::install::{Places, newest_from};
+    let Some(install) = newest_from(None, &Places::from_env(|n| std::env::var_os(n))) else {
+        return;
+    };
+    let mut config = rook_content::Config::empty();
+    config.install = Some(install);
+    config.network = false;
+    let (mut dom, player_gui) = client();
+    let screen = child(&mut dom, "ScreenGui", player_gui, &[]);
+    let text_box = child(
+        &mut dom,
+        "TextBox",
+        screen,
+        &[
+            ("Position", udim2(0.0, 100, 0.0, 100)),
+            ("Size", udim2(0.0, 300, 0.0, 80)),
+            ("Text", Value::String(String::new())),
+            ("TextSize", Value::Float32(20.0)),
+            ("TextColor3", Value::Color3(Color3::new(1.0, 0.0, 0.0))),
+            ("CursorPosition", Value::Int32(1)),
+        ],
+    );
+    let mut gui = Gui::default();
+    gui.set_content(std::sync::Arc::new(rook_content::Resolver::new(config)));
+    gui.set_focus(Some(text_box));
+    gui.sync(&mut dom);
+    let caret = |gui: &mut Gui, dom: &Dom| -> Option<(Vec2, Vec2)> {
+        let quads = drawn(gui, dom);
+        let carets: Vec<_> = (quads.iter())
+            .filter(|q| q.color == [0.5, 0.5, 0.5, 1.0])
+            .map(|q| (q.center, q.size))
+            .collect();
+        assert!(carets.len() <= 1);
+        carets.first().copied()
+    };
+    // Centered in the box, below the top bar's inset: the column from x
+    // 250 (the stop) to 251, a Legacy line (30 pixels) tall.
+    let shown = Some((Vec2::new(250.5, 198.0), Vec2::new(1.0, 30.0)));
+    assert_eq!(caret(&mut gui, &dom), shown);
+    let frames = |gui: &mut Gui, dom: &mut Dom, n: usize| {
+        for _ in 0..n {
+            gui.blink_caret(1.0 / 60.0);
+            gui.sync(dom);
+        }
+    };
+    frames(&mut gui, &mut dom, 17);
+    assert_eq!(caret(&mut gui, &dom), shown, "17 frames are under 0.3 s");
+    frames(&mut gui, &mut dom, 2);
+    assert_eq!(caret(&mut gui, &dom), None);
+    frames(&mut gui, &mut dom, 19);
+    assert_eq!(caret(&mut gui, &dom), shown);
+    frames(&mut gui, &mut dom, 19);
+    assert_eq!(caret(&mut gui, &dom), None);
+    gui.set_focus(None);
+    gui.set_focus(Some(text_box));
+    gui.sync(&mut dom);
+    assert_eq!(caret(&mut gui, &dom), shown, "focus shows it again");
+}

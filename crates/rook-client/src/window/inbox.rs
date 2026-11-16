@@ -9,6 +9,7 @@ use winit::dpi::{PhysicalPosition, PhysicalSize};
 use winit::event::{DeviceEvent, ElementState, Ime, MouseButton, MouseScrollDelta, WindowEvent};
 use winit::event_loop::ActiveEventLoop;
 use winit::keyboard::{KeyCode, PhysicalKey};
+use winit::platform::modifier_supplement::KeyEventExtModifierSupplement;
 
 use super::*;
 use super::{icon, keys};
@@ -85,7 +86,11 @@ impl Inbox {
                     self.events.push(Noted::Key {
                         code,
                         down: event.state == ElementState::Pressed,
-                        text: event.text.map(|t| t.to_string()),
+                        // With every modifier applied, as the platform
+                        // types it: Ctrl+A is "", which no TextBox
+                        // types, where `text` would be "a"; AltGr keeps
+                        // its characters.
+                        text: event.text_with_all_modifiers().map(str::to_string),
                     });
                 }
             }
