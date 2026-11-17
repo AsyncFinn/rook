@@ -10,14 +10,15 @@ use anyhow::Context;
 /// The extensions of the files `rook` opens by itself.
 const PLACES: [&str; 2] = ["rbxl", "rbxlx"];
 
-/// What to do without a subcommand: nothing given asks for a place, and a
-/// place file opens it, with what follows going to the player. `None`
-/// leaves the arguments to the command line.
+/// What to do without a subcommand: nothing given asks for a place, unless
+/// run from a terminal, and a place file opens it, with what follows going
+/// to the player. `None` leaves the arguments to the command line, which
+/// prints its help for nothing given.
 pub(crate) fn shortcut(args: &[OsString]) -> Option<anyhow::Result<()>> {
     match args.get(1) {
-        None => Some(ask()),
+        None if !rook_platform::console::from_terminal() => Some(ask()),
         Some(first) if is_place(Path::new(first)) => Some(run(&args[1..])),
-        Some(_) => None,
+        _ => None,
     }
 }
 

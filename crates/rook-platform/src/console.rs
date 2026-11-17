@@ -11,20 +11,41 @@
 #[allow(unsafe_code)]
 pub fn close_unshared() {
     #[cfg(windows)]
-    {
-        use windows_sys::Win32::System::Console::{FreeConsole, GetConsoleProcessList};
-        let mut pids = [0u32; 2];
-        // SAFETY: the buffer is valid for its length. With no console the
-        // count is 0, and with a terminal it's at least 2 (the shell too).
-        let count = unsafe { GetConsoleProcessList(pids.as_mut_ptr(), pids.len() as u32) };
-        if count == 1 {
-            // SAFETY: no handles to the console are held yet. A failure
-            // leaves the window open, as before.
-            unsafe {
-                FreeConsole();
-            }
+    if sharing_programs() == 1 {
+        // SAFETY: no handles to the console are held yet. A failure
+        // leaves the window open, as before.
+        unsafe {
+            windows_sys::Win32::System::Console::FreeConsole();
         }
     }
+}
+
+/// Whether this program was run from a terminal, rather than opened from
+/// Explorer or started by another program without one. Holds after
+/// [`close_unshared`], which only closes a console no terminal shares.
+pub fn from_terminal() -> bool {
+    #[cfg(windows)]
+    {
+        sharing_programs() >= 2
+    }
+    #[cfg(not(windows))]
+    {
+        use std::io::IsTerminal;
+        std::io::stdin().is_terminal()
+    }
+}
+
+/// How many programs share this program's console: 0 with none, 1 when
+/// Windows made it for this program alone, and at least 2 in a terminal
+/// (the shell too).
+#[cfg(windows)]
+#[allow(unsafe_code)]
+fn sharing_programs() -> u32 {
+    use windows_sys::Win32::System::Console::GetConsoleProcessList;
+    let mut pids = [0u32; 2];
+    // SAFETY: the buffer is valid for its length; a larger count than it
+    // holds is returned without filling it.
+    unsafe { GetConsoleProcessList(pids.as_mut_ptr(), pids.len() as u32) }
 }
 
 /// Take the text waiting at the front of the console's input, up to the

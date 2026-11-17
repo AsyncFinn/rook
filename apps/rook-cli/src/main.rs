@@ -1,7 +1,8 @@
 //! `rook`: open a place, and look inside places and Rook's own files.
 //!
 //! `rook place.rbxl` opens it in the player, as dragging it onto `rook.exe`
-//! does, and with nothing to open it asks for a place. What works on the
+//! does. Opened from Explorer with nothing to open, it asks for a place;
+//! run bare in a terminal, it prints its help. What works on the
 //! repository itself is `cargo xtask` (apps/xtask).
 
 mod commands;
@@ -10,7 +11,7 @@ use commands::{cache, content, dump, key, logs, play, roundtrip, run};
 use std::ffi::OsString;
 use std::path::PathBuf;
 
-use clap::{Parser, Subcommand};
+use clap::{CommandFactory, Parser, Subcommand};
 
 #[derive(Debug, Parser)]
 #[command(
@@ -19,8 +20,10 @@ use clap::{Parser, Subcommand};
     about = "Open and inspect Roblox places with Rook"
 )]
 struct Cli {
+    /// None only from a terminal (a bare `rook` elsewhere asks for a
+    /// place first), where it prints the help.
     #[command(subcommand)]
-    command: Command,
+    command: Option<Command>,
     /// Show Rook's debug messages; `--verbose <subsystem>` (content,
     /// terrain, ...) shows everything that area logs.
     #[arg(long, global = true, value_name = "SUBSYSTEM", num_args = 0..=1, require_equals = true, default_missing_value = "")]
@@ -214,7 +217,11 @@ fn main() -> anyhow::Result<()> {
         verbose: cli.verbose.clone(),
         file: false,
     });
-    rook_engine::logging::run(|| command(cli.command), |_| {})
+    let Some(command_given) = cli.command else {
+        Cli::command().print_help()?;
+        return Ok(());
+    };
+    rook_engine::logging::run(|| command(command_given), |_| {})
 }
 
 fn command(command: Command) -> anyhow::Result<()> {
