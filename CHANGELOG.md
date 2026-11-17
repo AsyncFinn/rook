@@ -5,6 +5,7 @@ Every release, newest first. How versions are numbered is in
 
 ## [Unreleased]
 
+- `rook` run with nothing after it in a terminal prints its help. Rook opened a window asking for a place, which only makes sense when `rook.exe` is opened from Explorer, where it still does.
 ## [0.5.0] - 2026-11-17
 
 Checked against Roblox 0.744.0.
