@@ -1,11 +1,17 @@
 # Builds a release from its tag on GitHub's machines, so no developer's
 # machine paths end up in the programs, and leaves it as a draft release
 # with the packaged folder and its changelog notes, to publish by hand.
+# Runs on a pushed tag, or called by the weekly release with the tag it cut.
 name: Release
 
 on:
   push:
     tags: ["v*"]
+  workflow_call:
+    inputs:
+      tag:
+        required: true
+        type: string
 
 permissions:
   contents: write
@@ -16,6 +22,8 @@ jobs:
     timeout-minutes: 180
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
 
       - uses: dtolnay/rust-toolchain@stable
 
@@ -34,17 +42,19 @@ jobs:
           (cd "$(dirname "$folder")" && 7z a -tzip "$name.zip" "$name" > /dev/null)
           echo "ZIP=$folder.zip" >> "$GITHUB_ENV"
 
-      # The notes are the tag's changelog section, without its heading.
+      # The notes are the tag's changelog section, without its heading; the
+      # title is the tag, then the heading's title when it has one.
       - name: Draft the release
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: ${{ github.ref_name }}
+          TAG: ${{ inputs.tag || github.ref_name }}
         run: |
           version=${TAG#v}
           heading=$(grep -m 1 "^## \[$version\]" CHANGELOG.md)
           test -n "$heading" || { echo "CHANGELOG.md has no section for $version"; exit 1; }
-          title=${heading#*] - }
-          title="$TAG: ${title#*- }"
+          rest=${heading#*] - }
+          title=$TAG
+          case $rest in *" - "*) title="$TAG: ${rest#* - }" ;; esac
           awk -v h="$heading" '$0 == h { on = 1; next } on && /^## \[/ { exit } on' CHANGELOG.md > notes.md
           gh release create "$TAG" "$ZIP" --draft --verify-tag --title "$title" --notes-file notes.md

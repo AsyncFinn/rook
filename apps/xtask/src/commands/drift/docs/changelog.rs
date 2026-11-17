@@ -1,5 +1,6 @@
 //! The changelog opens with `[Unreleased]`, then each release as
-//! `## [x.y.z] - YYYY-MM-DD - ...`, newest first.
+//! `## [x.y.z] - YYYY-MM-DD`, newest first, with an optional ` - title`
+//! (the weekly release workflow writes none).
 
 use rustc_hash::FxHashMap;
 
@@ -26,7 +27,7 @@ pub(super) fn check(by_path: &FxHashMap<&str, &Doc>, report: &mut Report) {
         let place = format!("{CHANGELOG}:{}", heading.line);
         let Some(release) = release(heading.text) else {
             report.errors.push(format!(
-                "{place}: \"{}\" isn't `[x.y.z] - YYYY-MM-DD - ...`",
+                "{place}: \"{}\" isn't `[x.y.z] - YYYY-MM-DD`",
                 heading.text
             ));
             continue;

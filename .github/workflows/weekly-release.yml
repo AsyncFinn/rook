@@ -1,0 +1,77 @@
+# Cuts the weekly release on a fixed day, as Roblox ships on a weekly
+# train: when [Unreleased] holds anything, it bumps the minor version,
+# turns [Unreleased] into that version's section, tags it, and builds the
+# draft release to publish by hand. Hotfixes stay by hand
+# (CONTRIBUTING.md#versioning).
+name: Weekly release
+
+on:
+  schedule:
+    - cron: "0 18 * * 3"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: weekly-release
+
+jobs:
+  cut:
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.cut.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      # Tags pushed with the workflow's token start no other workflow, so
+      # the release job below is called directly instead of on the tag.
+      - id: cut
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name AsyncFinn
+          git config user.email 266908642+AsyncFinn@users.noreply.github.com
+
+          # Main moves while this runs, and the new section sits where new
+          # entries land, so a rejected push starts again from the new main.
+          for attempt in 1 2 3; do
+            git fetch -q origin main
+            git reset -q --hard origin/main
+
+            entries=$(awk '/^## \[Unreleased\]$/ { on = 1; next } on && /^## \[/ { exit } on && /^- /' CHANGELOG.md | wc -l)
+            if [ "$entries" -eq 0 ]; then
+              echo "Nothing unreleased, no release this week."
+              exit 0
+            fi
+
+            current=$(sed -n '/^\[workspace.package\]/,/^\[/ s/^version = "\(.*\)"$/\1/p' Cargo.toml)
+            IFS=. read -r major minor _ <<< "$current"
+            version="$major.$((minor + 1)).0"
+            roblox=$(grep -m 1 -o '"version": *"[0-9]*\.[0-9]*\.[0-9]*' crates/rook-reflection/data/members.json | grep -o '[0-9.]*$')
+
+            sed -i "/^\[workspace.package\]/,/^\[/ s/^version = \".*\"$/version = \"$version\"/" Cargo.toml
+            cargo update --workspace --quiet
+            sed -i "0,/^## \[Unreleased\]$/ s//## [Unreleased]\n\n## [$version] - $(date -u +%F)\n\nChecked against Roblox $roblox./" CHANGELOG.md
+
+            git commit -q -m "Version $version" Cargo.toml Cargo.lock CHANGELOG.md
+            if git push -q origin HEAD:main; then
+              git tag "v$version"
+              git push -q origin "v$version"
+              echo "tag=v$version" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+          done
+          echo "Main kept moving; run this again."
+          exit 1
+
+  release:
+    needs: cut
+    if: needs.cut.outputs.tag != ''
+    uses: ./.github/workflows/release.yml
+    with:
+      tag: ${{ needs.cut.outputs.tag }}

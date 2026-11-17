@@ -170,11 +170,11 @@ Every behavior Rook implements is recorded with its source and one of four statu
 
 ## Versioning
 
-Rook is a rolling release: work lands on main all the time, and a release is a snapshot of main cut on purpose, about once a week. Like Roblox's own version, the middle number counts releases, so it grows steadily and says nothing about how complete Rook is; the [roadmap](docs/roadmap/README.md) says that.
+Rook is a rolling release: work lands on main all the time, and a release is a snapshot of main cut every week on a fixed day, as Roblox ships. Like Roblox's own version, the middle number counts releases, so it grows steadily and says nothing about how complete Rook is; the [roadmap](docs/roadmap/README.md) says that.
 
 - Every change goes under **[Unreleased]** in [CHANGELOG.md](CHANGELOG.md) as it lands, without a version of its own.
-- **Minor** (`0.N.0`): the weekly release, when anything new landed since the last one.
-- **Patch** (`0.N.y`): fixes only. Either a week in which only fixes landed, or a hotfix to the latest release: branch from its tag, cherry-pick the fix (already on main), tag `v0.N.y` and delete the branch. Patches only ever go on top of the latest release; older releases aren't maintained.
+- **Minor** (`0.N.0`): the weekly release. The Weekly release workflow cuts it every Wednesday when [Unreleased] holds anything: it bumps the version, turns [Unreleased] into the release's section, tags it and builds the draft. No one cuts it by hand; run the workflow from the Actions tab to cut one early.
+- **Patch** (`0.N.y`): a hotfix to the latest release, for a bug in it that players hit (a crash, a hang, a place that stops working, a regression): branch from its tag, cherry-pick the fix (already on main), tag `v0.N.y` and delete the branch. Patches only ever go on top of the latest release; older releases aren't maintained.
 - Builds between releases are development builds of the next version.
 - Builds for other people are made with `cargo dist` and nothing else ([build profiles](#build-profiles)). Releases are built by CI: pushing a `vX.Y.Z` tag runs `cargo xtask package` on GitHub's machines, so no one's local paths end up in the programs, and leaves a draft GitHub release with the zipped folder and that version's changelog section, published by hand.
 - Commits go to GitHub as they land, so [Unreleased] on GitHub shows what the next release will hold.
