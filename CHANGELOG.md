@@ -5,6 +5,10 @@ Every release, newest first. How versions are numbered is in
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-11-17
+
+Checked against Roblox 0.744.0.
+
 - A release is cut every week on a fixed day by GitHub's machines whenever anything new landed, and hotfixes go out for bugs players hit in the latest one. Releases were cut by hand, and weeks could pass without one. See [versioning](CONTRIBUTING.md#versioning).
 - Ctrl shortcuts in a TextBox (select all, copy, cut, paste) no longer type their letter, and the caret blinks in Roblox's mid gray. Rook typed the letter along with the shortcut, and drew a steady caret in the text's color. See [TextBox](docs/behavior/gui/input.md#textbox).
 - Ctrl+C on an empty command-line prompt does nothing, so copying output with it no longer closes the prompt. Rook ended input there, and the prompt was gone for the rest of the run. See [getting started](docs/guide/getting-started.md).
