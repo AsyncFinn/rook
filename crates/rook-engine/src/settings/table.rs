@@ -119,7 +119,7 @@ pub const ROBLOX_INSTALL: Setting = Setting {
 pub const ASSET_DELIVERY: Setting = Setting {
     name: "assetDelivery",
     tier: Tier::Developer,
-    unset: Unset::Means("on in `rook-player` and `rook content`, off in headless runs"),
+    unset: Unset::Means("on in `rook-player` and `cargo xtask content`, off in headless runs"),
     var: "ROOK_ASSET_DELIVERY",
     flag: None,
 };

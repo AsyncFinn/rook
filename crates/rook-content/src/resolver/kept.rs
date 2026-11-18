@@ -11,7 +11,7 @@
 //! goes into the kept folder, which is never trimmed. The folder has the
 //! cache's layout ([`super::cache`]), so one reader handles both.
 //!
-//! `rook content pin` writes the list again from the materials' and
+//! `cargo xtask pin-content` writes the list again from the materials' and
 //! terrain's tables, with each asset's version today.
 
 use rustc_hash::FxHashMap;

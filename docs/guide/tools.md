@@ -1,45 +1,18 @@
 # The `rook` command-line tools
 
-`rook` is built alongside `rook-player` (see [getting-started.md](getting-started.md)). It opens places and looks inside them. What works on the repository itself is `cargo xtask`, [below](#working-on-the-repository), and doesn't ship.
+`rook` is built alongside `rook-player` (see [getting-started.md](getting-started.md)). It opens places and looks after Rook's own files: its cache, logs and Open Cloud key. The tools for looking inside places and working on Rook are `cargo xtask`, [below](#working-on-the-repository), and don't ship.
 
 | Command | What it does |
 |---|---|
 | `rook` | Ask for a place and open it in the player |
 | `rook place.rbxl` | Open a place, with any `rook-player` flags after it; `rook play` is the same |
-| `rook dump` | Print a place's instance tree and properties |
-| `rook source` | Print the source of scripts by name |
-| `rook roundtrip` | Load, save and reload a file and report every difference |
-| `rook run-headless` | Run server scripts without a window and print their output |
-| `rook content` | Show how content references resolve: from Roblox's packages or install, content folders, the cache or asset delivery, and why any fail |
 | `rook cache` | Show the download cache's folder and size; `prune --older-than <days>`, `trim` or `clear` it |
 | `rook logs` | Print the newest log file's path; `--open` opens the logs folder |
 | `rook key` | Save or forget your Open Cloud key |
 
-## Inspecting and testing files
-
-```sh
-rook dump place.rbxl --properties --depth 3
-rook roundtrip place.rbxl                  # load, save, reload, report differences
-rook roundtrip place.rbxl --to xml         # same, converting to XML
-rook run-headless place.rbxl --seconds 10  # run server scripts, print output
-rook run-headless place.rbxl --repl        # then open a command bar (see getting-started.md)
-rook run-headless place.rbxl --join --core-scripts --dump CoreGui
-                                                 # a player's client too, running Roblox's CoreScripts; print its CoreGui
-rook run-headless place.rbxl --join --core-scripts --click 38,34 --dump CoreGui
-                                                 # the same after clicking at (38, 34) in a 1280 x 720 window
-rook run-headless place.rbxl --join --core-scripts --user-settings settings.xml
-                                                 # the player's settings load from settings.xml and are saved back
-rook run-headless place.rbxl --join --core-scripts --key One --dump CoreGui
-                                                 # the same after pressing 1 (an Enum.KeyCode name)
-```
-
 ## Content and assets
 
 ```sh
-rook content rbxassetid://12221462               # what it is, where it comes from, size, hash
-rook content place.rbxl                          # every reference in a place and its outcome: what resolves, from where, what fails and why
-rook content --place place.rbxl --offline        # only the install, folders and cache
-                                                 # (--place also totals mesh and image references: which decode, by version or format, and why others fail)
 rook cache                                       # where downloads are cached and how much
 rook cache prune --older-than 30                 # delete what hasn't been used for 30 days
 ```
@@ -55,11 +28,16 @@ Rook's settings come in three kinds ([settings](../design/data-and-logging.md#se
 
 ## Working on the repository
 
-`cargo xtask` runs from a checkout of Rook. It builds with the repository and never ships ([build profiles](../../CONTRIBUTING.md#build-profiles)).
+`cargo xtask` is Rook's developer tools, run from a checkout of Rook. It builds with the repository and never ships ([build profiles](../../CONTRIBUTING.md#build-profiles)).
 
 | Command | What it does |
 |---|---|
+| `cargo xtask dump` | Print a place's instance tree and properties |
+| `cargo xtask source` | Print the source of scripts by name |
+| `cargo xtask run-headless` | Run server scripts without a window and print their output; `--join` runs a player's client too, with scripted clicks and keys |
+| `cargo xtask content` | Show how content references resolve: from Roblox's packages or install, content folders, the cache or asset delivery, and why any fail |
 | `cargo xtask package` | Build the folder to hand to other people |
+| `cargo xtask roundtrip` | Load, save and reload a file and report every difference; `--to xml` or `binary` converts it on the way |
 | `cargo xtask conformance record` / `run` | Record behavior in Roblox Studio and check Rook against it |
 | `cargo xtask corpus-scan` | Scan a folder of places for what loads and which classes, properties and script APIs they use |
 | `cargo xtask corpus-run` | Run every place in a folder headless and rank the most common script errors |
@@ -68,6 +46,31 @@ Rook's settings come in three kinds ([settings](../design/data-and-logging.md#se
 | `cargo xtask studio-defaults` | Measure in Studio the property defaults the API data leaves out |
 | `cargo xtask pin-content` | Write the list of content Rook keeps for good again |
 | `cargo xtask drift` | Check the repository for drift; `scripts/check` runs it |
+
+### Inspecting and running places
+
+```sh
+cargo xtask dump place.rbxl --properties --depth 3
+cargo xtask run-headless place.rbxl --seconds 10  # run server scripts, print output
+cargo xtask run-headless place.rbxl --repl        # then open a command bar (see getting-started.md)
+cargo xtask run-headless place.rbxl --join --core-scripts --dump CoreGui
+                                                 # a player's client too, running Roblox's CoreScripts; print its CoreGui
+cargo xtask run-headless place.rbxl --join --core-scripts --click 38,34 --dump CoreGui
+                                                 # the same after clicking at (38, 34) in a 1280 x 720 window
+cargo xtask run-headless place.rbxl --join --core-scripts --user-settings settings.xml
+                                                 # the player's settings load from settings.xml and are saved back
+cargo xtask run-headless place.rbxl --join --core-scripts --key One --dump CoreGui
+                                                 # the same after pressing 1 (an Enum.KeyCode name)
+```
+
+### Content references
+
+```sh
+cargo xtask content rbxassetid://12221462               # what it is, where it comes from, size, hash
+cargo xtask content place.rbxl                          # every reference in a place and its outcome: what resolves, from where, what fails and why
+cargo xtask content --place place.rbxl --offline        # only the install, folders and cache
+                                                 # (--place also totals mesh and image references: which decode, by version or format, and why others fail)
+```
 
 ## Logs and failures
 

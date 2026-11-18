@@ -81,9 +81,9 @@ Each is given by its flag, then its variable, then its default; the first that g
 | `contentOrder` | `ROOK_CONTENT_ORDER` | | developer | `overrides,defaults,install,folders,delivery` | Where content comes from, in order, comma-separated. `install` is Roblox's packages, downloaded as needed, then a Roblox install ([client packages](../behavior/content/client-packages.md)) |
 | `contentFolders` | `ROOK_CONTENT_DIRS` | | developer | none | Folders laid out like an install's `content` (content packages, local overrides), separated like `PATH` |
 | `robloxInstall` | `ROOK_ROBLOX_INSTALL` | | developer | the newest install found | A Roblox version or `content` folder, or `off` |
-| `assetDelivery` | `ROOK_ASSET_DELIVERY` | | developer | on in `rook-player` and `rook content`, off in headless runs | Whether content may be downloaded (asset delivery, Roblox's packages) |
+| `assetDelivery` | `ROOK_ASSET_DELIVERY` | | developer | on in `rook-player` and `cargo xtask content`, off in headless runs | Whether content may be downloaded (asset delivery, Roblox's packages) |
 | `dataFolder` | `ROOK_DATA_DIR` | | developer | the platform's folders | Everything under one folder |
-| `coreScripts` | `ROOK_CORE_SCRIPTS` | `--core-scripts` | developer | `off` | Run Roblox's own CoreScripts on each client ([CoreScripts](../behavior/gui/core-scripts.md)); the flag is `rook-player`'s and `rook run-headless --join`'s |
+| `coreScripts` | `ROOK_CORE_SCRIPTS` | `--core-scripts` | developer | `off` | Run Roblox's own CoreScripts on each client ([CoreScripts](../behavior/gui/core-scripts.md)); the flag is `rook-player`'s and `cargo xtask run-headless --join`'s |
 
 ### The Open Cloud key
 
@@ -149,7 +149,7 @@ Each run of the player writes one file, `logs\rook-player-<time>.log`. `cargo xt
 
 Content failures are `rook_content::Failure`: a `FailureKind` (`not-found`, `forbidden`, `unsupported`, `offline`, `network`, `invalid`, `unknown-version`) and a message. The decoders return typed errors (`MeshError`, `ImageError`, `AudioError`). The loader turns them into failures, keeping "a version Rook can't read yet" (`unknown-version`) apart from "damaged or not that kind of file" (`invalid`). `rook-scene`'s scene keeps each failed file's failure and logs it where the instance path is known (`rook_scene::content::report`). See the error rule in [CONTRIBUTING](../../CONTRIBUTING.md#errors).
 
-`rook content <place>` lists every content reference in a place and what became of it: where it came from, or why it didn't load or decode.
+`cargo xtask content <place>` lists every content reference in a place and what became of it: where it came from, or why it didn't load or decode.
 
 ## Overrides
 

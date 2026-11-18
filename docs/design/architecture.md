@@ -39,8 +39,8 @@ crates/
                     loop and render thread, screenshot/bench/record; its `window` feature is the winit
                     window, with its gamepads, every app that opens one runs
 apps/
-  rook-cli          rook: opens places in rook-player, dump, roundtrip, run-headless, content
-  xtask             cargo xtask: conformance, corpus-scan, drift, package; never shipped
+  rook-cli          rook: opens places in rook-player; cache, logs, key
+  xtask             cargo xtask: developer tools (run-headless, dump, content, conformance, corpus-scan, drift, package); never shipped
   rook-player       the desktop player: its command line around rook-client, message boxes
   rook-server       dedicated server: a place's server at 60 Hz, no window
   rook-studio       (unscheduled) editor

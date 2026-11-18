@@ -3780,21 +3780,13 @@ name = "rook-cli"
 version = "0.5.0"
 dependencies = [
  "anyhow",
- "blake3",
  "clap",
  "embed-resource",
- "fs-err",
- "rbx_dom_weak",
- "rbx_types",
  "resvg",
  "rfd",
  "rook-content",
  "rook-engine",
- "rook-formats",
- "rook-lua",
  "rook-platform",
- "rook-reflection",
- "rook-types",
  "rpassword",
 ]
 

@@ -1,4 +1,4 @@
-//! `rook content <reference>...`: what each reference means and where its
+//! `cargo xtask content <reference>...`: what each reference means and where its
 //! bytes come from.
 
 use super::*;
