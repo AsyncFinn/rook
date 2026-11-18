@@ -2,19 +2,23 @@
 //! numbers and comments. Only the terminal's 16 named colors, so the
 //! user's theme decides what they look like.
 
-const KEYWORD: &str = "\x1b[35m";
-const CONSTANT: &str = "\x1b[36m";
-const STRING: &str = "\x1b[32m";
-const NUMBER: &str = "\x1b[33m";
-const COMMENT: &str = "\x1b[90m";
-const RESET: &str = "\x1b[0m";
+use nu_ansi_term::{Color, Style};
+use reedline::StyledText;
 
-/// `source` with color codes around its tokens. The whole buffer is
-/// colored at once, so a long string or comment spanning lines stays one
-/// token.
-pub(super) fn highlight(source: &str) -> String {
+const KEYWORD: Color = Color::Magenta;
+const CONSTANT: Color = Color::Cyan;
+const STRING: Color = Color::Green;
+const NUMBER: Color = Color::Yellow;
+const COMMENT: Color = Color::DarkGray;
+
+/// `source` split into colored tokens and the plain text between them. The
+/// whole buffer is colored at once, so a long string or comment spanning
+/// lines stays one token.
+pub(super) fn highlight(source: &str) -> StyledText {
     let bytes = source.as_bytes();
-    let mut out = String::with_capacity(source.len() * 2);
+    let mut out = StyledText::new();
+    // Where the plain text since the last token starts.
+    let mut plain = 0;
     let mut i = 0;
     while i < bytes.len() {
         let start = i;
@@ -50,19 +54,21 @@ pub(super) fn highlight(source: &str) -> String {
                 None
             }
         };
-        match color {
-            Some(color) => {
-                out.push_str(color);
-                out.push_str(&source[start..i]);
-                out.push_str(RESET);
+        if let Some(color) = color {
+            if plain < start {
+                out.push((Style::new(), source[plain..start].to_owned()));
             }
-            None => out.push_str(&source[start..i]),
+            out.push((color.normal(), source[start..i].to_owned()));
+            plain = i;
         }
+    }
+    if plain < source.len() {
+        out.push((Style::new(), source[plain..].to_owned()));
     }
     out
 }
 
-fn word_color(word: &str) -> Option<&'static str> {
+fn word_color(word: &str) -> Option<Color> {
     match word {
         "nil" | "true" | "false" => Some(CONSTANT),
         // `continue` is contextual in Luau, but a variable of that name is
@@ -156,17 +162,12 @@ mod tests {
     use super::*;
 
     /// The colored spans of `source`, as (color, text).
-    fn spans(source: &str) -> Vec<(&'static str, String)> {
-        let out = highlight(source);
-        let mut spans = Vec::new();
-        for part in out.split(RESET) {
-            for color in [KEYWORD, CONSTANT, STRING, NUMBER, COMMENT] {
-                if let Some(at) = part.find(color) {
-                    spans.push((color, part[at + color.len()..].to_owned()));
-                }
-            }
-        }
-        spans
+    fn spans(source: &str) -> Vec<(Color, String)> {
+        highlight(source)
+            .buffer
+            .into_iter()
+            .filter_map(|(style, text)| Some((style.foreground?, text)))
+            .collect()
     }
 
     #[test]
@@ -203,6 +204,9 @@ mod tests {
     #[test]
     fn names_and_other_text_pass_through() {
         let source = "print(ending, élan.x)";
-        assert_eq!(highlight(source), source);
+        assert_eq!(
+            highlight(source).buffer,
+            [(Style::new(), source.to_owned())]
+        );
     }
 }

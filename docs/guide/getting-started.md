@@ -83,7 +83,7 @@ Without them, or while you have no character, the window flies its own camera:
 
 ## Command bar
 
-When the player runs in an interactive terminal, that terminal shows a `>` prompt, like Studio's command bar with the feel of Luau's own REPL. Each entry runs as Luau in the open place; an expression prints its value, and globals you set stay set. An unfinished statement continues on a `>>` line. The arrow keys edit the line and recall earlier entries, and output prints above the prompt without disturbing what you're typing.
+When the player runs in an interactive terminal, that terminal shows a `>` prompt, like Studio's command bar with the feel of Luau's own REPL. Each entry runs as Luau in the open place; an expression prints its value, and globals you set stay set. An unfinished statement continues on a `>>` line, and Ctrl+J adds one yourself (so do Shift, Ctrl or Alt+Enter, in terminals that tell them apart from Enter). The arrow keys edit the line and recall earlier entries, and output prints above the prompt without disturbing what you're typing.
 
 ```text
 > workspace.Gravity
