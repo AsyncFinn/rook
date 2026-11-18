@@ -1,7 +1,7 @@
-//! `rook content`: how content references resolve.
+//! `cargo xtask content`: how content references resolve.
 //!
-//! `rook content <reference>...` shows what each reference means and where
-//! its bytes come from; `rook content --place <file>` does the same for
+//! `cargo xtask content <reference>...` shows what each reference means and where
+//! its bytes come from; `cargo xtask content --place <file>` does the same for
 //! every content property in a place and sums it up.
 
 use std::collections::BTreeMap;

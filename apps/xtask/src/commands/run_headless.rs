@@ -1,4 +1,4 @@
-//! `rook run-headless`: run a place's server Scripts without a window,
+//! `cargo xtask run-headless`: run a place's server Scripts without a window,
 //! and with `--join` a player's client too.
 
 use std::path::Path;
@@ -35,7 +35,6 @@ pub(crate) struct Run<'a> {
     pub gamepad: Option<rook_engine::GamepadKind>,
     /// Wheel turns after the keys, in steps, a second apart.
     pub wheel: &'a [f32],
-    #[cfg(feature = "repl")]
     pub repl: bool,
 }
 
@@ -145,7 +144,6 @@ pub(crate) fn run(file: &Path, how: &Run<'_>) -> anyhow::Result<()> {
             rook_engine::console::print_entry("Server", entry);
         }
     }
-    #[cfg(feature = "repl")]
     let log = if how.repl {
         [log, interactive(&mut server)].concat()
     } else {
@@ -256,7 +254,6 @@ fn summary(side: &str, dm: &DataModel, log: &[LogEntry], started: Instant) {
 
 /// Run in real time at 60 Hz with the command prompt until input ends,
 /// printing output as it comes. Returns the output.
-#[cfg(feature = "repl")]
 fn interactive(server: &mut Server) -> Vec<rook_lua::LogEntry> {
     let Some(mut repl) = rook_engine::console::repl::Repl::start() else {
         rook_engine::console::print_message(

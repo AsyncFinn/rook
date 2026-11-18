@@ -15,26 +15,16 @@ name = "rook"
 path = "src/main.rs"
 
 [dependencies]
-fs-err.workspace = true
-rook-types.workspace = true
-rook-reflection.workspace = true
-rook-formats.workspace = true
 rook-engine.workspace = true
 rook-platform = { workspace = true, features = ["native"] }
-rook-lua.workspace = true
 rook-content.workspace = true
-rbx_dom_weak.workspace = true
-rbx_types.workspace = true
 anyhow.workspace = true
 clap.workspace = true
 rfd.workspace = true
-blake3.workspace = true
 rpassword.workspace = true
 
 [features]
-default = ["repl", "developer-overrides"]
-# `run-headless --repl`: type Luau into the running place.
-repl = ["rook-engine/repl"]
+default = ["developer-overrides"]
 # Developer settings (rook-engine's feature of the same name).
 developer-overrides = ["rook-engine/developer-overrides"]
 # A build for other people: `cargo dist`.

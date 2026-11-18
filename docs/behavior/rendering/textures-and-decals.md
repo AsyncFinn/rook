@@ -32,7 +32,7 @@ scan now counts looks too):
 | Foil, Brick, Sand, Granite, Marble, Metal, Pebble, Fabric, Neon | 177, 158, 149, 127, 125, 110, 105, 101, 84 | |
 | `Reflectance` above 0 | 1,405 | 377,042 |
 
-*Image formats* (`rook content --place`, which now decodes every image
+*Image formats* (`cargo xtask content --place`, which now decodes every image
 reference and totals the results by format, over 60 random archive places
 and a large older place, anonymous): of the images that load, 648 distinct are
 PNG (1,926 uses), 16 JPEG, 1 BMP (10 uses) and 2 DDS; none is a GIF or
@@ -174,7 +174,7 @@ requester") or don't exist. A cached anonymous refusal no longer stops the
 key being tried.
 
 *Performance* (release builds, base = the previous commit, one run each):
-`rook run-headless --seconds 10` gave identical output on a large older place,
+`cargo xtask run-headless --seconds 10` gave identical output on a large older place,
 a small place and an early place (15.05 against 14.98 s, 0.50 against 0.46 s, 0.45
 against 0.48 s). `rook-player --bench 300`: a small place (3 images) and an early place
 (5 images) unchanged (render 1.49 against 1.53 ms, 1.71 against 1.71 ms);

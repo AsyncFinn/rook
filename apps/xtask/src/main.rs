@@ -1,11 +1,13 @@
-//! `cargo xtask`: what works on the Rook repository itself and never ships:
-//! measuring Studio, checking the repository and making builds for other
-//! people. The tools that do ship are `rook` (apps/rook-cli).
+//! `cargo xtask`: Rook's developer tools, which never ship: looking inside
+//! places and running them headless, measuring Studio, checking the
+//! repository and making builds for other people. What ships is `rook`
+//! (apps/rook-cli), which opens places.
 
 mod commands;
 
 use commands::{
-    conformance, corpus, drift, gen_api, package, pin_content, studio_defaults, terrain,
+    conformance, content, corpus, drift, dump, gen_api, package, pin_content, roundtrip,
+    run_headless, studio_defaults, terrain,
 };
 use std::path::{Path, PathBuf};
 
@@ -51,6 +53,106 @@ enum Command {
         /// Worker threads for `--scan` (default: 8).
         #[arg(long)]
         jobs: Option<usize>,
+    },
+    /// Print a place or model file's instance tree.
+    Dump {
+        file: PathBuf,
+        /// Also print each instance's properties.
+        #[arg(long, short)]
+        properties: bool,
+        /// Maximum depth to print (default: unlimited).
+        #[arg(long)]
+        depth: Option<usize>,
+    },
+    /// Print the source of scripts whose full name contains NAME.
+    Source { file: PathBuf, name: String },
+    /// Run a place's server Scripts headless and print their output.
+    RunHeadless {
+        file: PathBuf,
+        /// Seconds of game time to simulate.
+        #[arg(long, default_value_t = 10.0)]
+        seconds: f64,
+        /// Script timeout in seconds (Roblox Studio's default is 10).
+        #[arg(long, default_value_t = 10.0)]
+        timeout: f64,
+        /// Print only the summary.
+        #[arg(long, short)]
+        quiet: bool,
+        /// Also run this Luau file as a server script after the place starts.
+        #[arg(long)]
+        script: Option<PathBuf>,
+        /// A player joins, and their client runs too; its output and the
+        /// members it lacks are printed after the server's.
+        #[arg(long)]
+        join: bool,
+        /// The joined client runs Roblox's CoreScripts from the Studio
+        /// install (the `coreScripts` setting, in builds with developer
+        /// overrides).
+        #[arg(long = rook_engine::settings::CORE_SCRIPTS.long(), requires = "join")]
+        core_scripts: bool,
+        /// With `--join`: print the client's tree from this instance at the
+        /// end (names by dots, as `CoreGui.RobloxGui`), with each GUI
+        /// object's size and whether it shows.
+        #[arg(long, requires = "join")]
+        dump: Option<String>,
+        /// With `--join`: after `--seconds`, the player clicks here (`x,y`
+        /// in pixels of a 1280 × 720 window); repeat for more clicks.
+        #[arg(long, requires = "join")]
+        click: Vec<rook_engine::ScreenPoint>,
+        /// With `--join`: the player's settings (`UserSettings().GameSettings`)
+        /// load from this file, as rook-player's `GlobalBasicSettings.xml`,
+        /// and are saved to it at the end.
+        #[arg(long, requires = "join")]
+        user_settings: Option<PathBuf>,
+        /// With `--join`: after the clicks, the player presses this key (an
+        /// `Enum.KeyCode` name: `One`, `Backquote`); repeat for more keys.
+        #[arg(long, requires = "join")]
+        key: Vec<String>,
+        /// With `--join`: a pad of this kind (`xbox`, `ps4`, `ps5`,
+        /// `default`) is plugged in as Gamepad1 when the client starts, and `--key`s
+        /// naming its buttons (`ButtonA`, `DPadUp`) press them on it.
+        #[arg(long, requires = "join", value_parser = parse_gamepad)]
+        gamepad: Option<rook_engine::GamepadKind>,
+        /// With `--join`: after the keys, the mouse wheel turns this many
+        /// steps (positive is forward); repeat for more turns.
+        #[arg(long, requires = "join", allow_hyphen_values = true)]
+        wheel: Vec<f32>,
+        /// After `--seconds`, keep running in real time with a `>` prompt
+        /// that runs Luau on the server, until input ends (Ctrl+C on an
+        /// empty line, or Ctrl+D).
+        #[arg(long)]
+        repl: bool,
+    },
+    /// Show how content references resolve: what each means, which
+    /// provider has it (Rook's defaults, the Roblox install, content
+    /// folders, the cache or asset delivery), and why one fails.
+    ///
+    /// Asset delivery is on here unless `--offline` or the
+    /// `assetDelivery` setting is off; downloads go to the cache. Given a place
+    /// or model file, reports every content reference in it and its
+    /// outcome.
+    Content {
+        /// References to resolve (`rbxassetid://5`, `rbxasset://textures/face.png`, ...),
+        /// or one place or model file.
+        #[arg(required_unless_present = "place")]
+        references: Vec<String>,
+        /// Resolve every content reference in this place or model instead.
+        #[arg(long, conflicts_with = "references")]
+        place: Option<PathBuf>,
+        /// Don't use the network: only the install, folders and the cache.
+        #[arg(long)]
+        offline: bool,
+        /// Forget cached answers for these references first.
+        #[arg(long)]
+        refresh: bool,
+    },
+    /// Load a place or model, save it again, reload it, and report every
+    /// difference: what proves saving keeps a file whole.
+    Roundtrip {
+        file: PathBuf,
+        /// Save in this format instead of the file's own.
+        #[arg(long, value_enum)]
+        to: Option<FormatArg>,
     },
     /// Run every place in a folder headless and report how many run cleanly.
     CorpusRun {
@@ -148,6 +250,21 @@ fn main() -> anyhow::Result<()> {
     rook_engine::logging::run(|| command(cli.command), |_| {})
 }
 
+#[derive(Debug, Clone, Copy, clap::ValueEnum)]
+enum FormatArg {
+    Binary,
+    Xml,
+}
+
+impl From<FormatArg> for rook_formats::Format {
+    fn from(f: FormatArg) -> Self {
+        match f {
+            FormatArg::Binary => Self::Binary,
+            FormatArg::Xml => Self::Xml,
+        }
+    }
+}
+
 fn command(command: Command) -> anyhow::Result<()> {
     match command {
         Command::Package => package::run(),
@@ -164,6 +281,63 @@ fn command(command: Command) -> anyhow::Result<()> {
                 terrain::inspect(&paths)
             }
         }
+        Command::Dump {
+            file,
+            properties,
+            depth,
+        } => dump::run(&file, properties, depth),
+        Command::Source { file, name } => dump::print_source(&file, &name),
+        Command::Content {
+            references,
+            place,
+            offline,
+            refresh,
+        } => {
+            let options = content::Options { offline, refresh };
+            // A lone file argument is a place or model.
+            let place = place.or_else(|| match references.as_slice() {
+                [one] if std::path::Path::new(one).is_file() => Some(PathBuf::from(one)),
+                _ => None,
+            });
+            match place {
+                Some(file) => content::place(&file, &options),
+                None => content::references(&references, &options),
+            }
+        }
+        Command::RunHeadless {
+            file,
+            seconds,
+            timeout,
+            quiet,
+            script,
+            join,
+            core_scripts,
+            dump,
+            click,
+            user_settings,
+            key,
+            gamepad,
+            wheel,
+            repl,
+        } => run_headless::run(
+            &file,
+            &run_headless::Run {
+                seconds,
+                timeout,
+                quiet,
+                script: script.as_deref(),
+                join,
+                core_scripts,
+                dump: dump.as_deref(),
+                clicks: &click,
+                user_settings: user_settings.as_deref(),
+                keys: &key,
+                gamepad,
+                wheel: &wheel,
+                repl,
+            },
+        ),
+        Command::Roundtrip { file, to } => roundtrip::run(&file, to.map(Into::into)),
         Command::CorpusRun {
             dir,
             out,
@@ -200,4 +374,15 @@ fn command(command: Command) -> anyhow::Result<()> {
         ),
         Command::StudioDefaults { list, out } => studio_defaults::run(list, &out),
     }
+}
+
+fn parse_gamepad(kind: &str) -> Result<rook_engine::GamepadKind, String> {
+    use rook_engine::GamepadKind;
+    Ok(match kind {
+        "xbox" => GamepadKind::Xbox,
+        "ps4" => GamepadKind::PlayStation4,
+        "ps5" => GamepadKind::PlayStation5,
+        "default" => GamepadKind::Default,
+        _ => return Err("one of xbox, ps4, ps5, default".into()),
+    })
 }

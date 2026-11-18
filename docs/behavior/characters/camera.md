@@ -206,7 +206,7 @@ in `rook-lua`'s `api/methods/camera/rays.rs` (roll, near plane),
 ## In Rook
 
 - What the PlayerModule calls that Rook lacked, from running it in a
-  client (`rook run-headless --join --core-scripts`): two members
+  client (`cargo xtask run-headless --join --core-scripts`): two members
   (`Player:Move`, `UserGameSettings:SetGamepadCameraSensitivityVisible`)
   and behavior behind members Rook had: the StarterPlayer copies,
   CameraSubject and CameraType after spawning, `RootPart`, `NearPlaneZ`,

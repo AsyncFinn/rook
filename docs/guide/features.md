@@ -7,7 +7,7 @@ Everything Rook supports today. What's coming next is in the [roadmap](../roadma
 - Loads and saves **`.rbxl`, `.rbxm`, `.rbxlx` and `.rbxmx`**, binary and XML.
 - **Legacy XML upgrade** for roughly 2006 to 2010 files that standard parsers reject: dropped `<External>` entries, `<hash>` content, control characters, MSVC float values like `1.#QNAN`. Files that already load normally are never rewritten.
 - Legacy property names (`size` → `Size`) and the database's migrations are applied on load, the way Studio upgrades old files.
-- Unknown properties are kept, so saving never silently drops data, and `rook roundtrip` proves it.
+- Unknown properties are kept, so saving never silently drops data, and `cargo xtask roundtrip` proves it.
 - A corrupt file produces an error, never a crash.
 
 ## Data model
@@ -82,11 +82,11 @@ The sun and moon in the sky and other lighting (point and spot lights, Future li
 
 ## Tooling
 
-- `rook dump`: print a place's instance tree and properties.
-- `rook roundtrip`: load, save and reload a file and report every difference.
+- `cargo xtask dump`: print a place's instance tree and properties.
+- `cargo xtask roundtrip`: load, save and reload a file and report every difference.
 - `cargo xtask corpus-scan`: scan a folder of places for what loads and which classes, properties and script APIs they use.
-- `rook run-headless` and `cargo xtask corpus-run`: run server scripts without a window and report what works.
-- `rook content`: show where a content reference, or every reference in a place, comes from and why any fail.
+- `cargo xtask run-headless` and `cargo xtask corpus-run`: run server scripts without a window and report what works.
+- `cargo xtask content`: show where a content reference, or every reference in a place, comes from and why any fail.
 - `cargo xtask conformance record` / `run`: record behavior in Roblox Studio and check Rook against it.
 
 Usage for each is in [tools.md](tools.md).

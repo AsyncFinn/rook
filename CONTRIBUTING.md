@@ -12,7 +12,7 @@ The most valuable reports are:
 
 Please include:
 
-- The `rook run-headless place.rbxl` output (see [docs/guide/tools.md](docs/guide/tools.md)).
+- The log of the run where it happened: `rook logs` prints the newest one's path, and a crash also leaves a report in the logs' `crashes` folder (see [logs and failures](docs/guide/tools.md#logs-and-failures)).
 - If you can, a minimal place that reproduces it. Only share places you have the rights to share.
 - For a behavior difference, what Roblox does and what Rook does.
 
@@ -174,7 +174,7 @@ Rook is a rolling release: work lands on main all the time, and a release is a s
 
 - Every change goes under **[Unreleased]** in [CHANGELOG.md](CHANGELOG.md) as it lands, without a version of its own.
 - **Minor** (`0.N.0`): the weekly release. The Weekly release workflow cuts it every Wednesday when [Unreleased] holds anything: it bumps the version, turns [Unreleased] into the release's section, tags it and builds the draft. No one cuts it by hand; run the workflow from the Actions tab to cut one early.
-- **Patch** (`0.N.y`): a hotfix to the latest release, for a bug in it that players hit (a crash, a hang, a place that stops working, a regression): branch from its tag, cherry-pick the fix (already on main), tag `v0.N.y` and delete the branch. Patches only ever go on top of the latest release; older releases aren't maintained.
+- **Patch** (`0.N.y`): a hotfix to the latest release, for any bug in it that people notice and that has a small, self-contained fix, without waiting for the next week: branch from its tag, cherry-pick the fix (already on main), tag `v0.N.y` and delete the branch. Patches only ever go on top of the latest release; older releases aren't maintained.
 - Builds between releases are development builds of the next version.
 - Builds for other people are made with `cargo dist` and nothing else ([build profiles](#build-profiles)). Releases are built by CI: pushing a `vX.Y.Z` tag runs `cargo xtask package` on GitHub's machines, so no one's local paths end up in the programs, and leaves a draft GitHub release with the zipped folder and that version's changelog section, published by hand.
 - Commits go to GitHub as they land, so [Unreleased] on GitHub shows what the next release will hold.
