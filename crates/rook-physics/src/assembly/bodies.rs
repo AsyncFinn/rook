@@ -349,7 +349,7 @@ impl Physics {
             .position(pose_of(&offset) * shape_pose);
         // A server's Touched fires for a client's character against
         // anchored parts and other characters (observed in Studio 0.744).
-        let collider = if kinematic && matches!(self.authority, Authority::Except(_)) {
+        let collider = if kinematic && self.serves() {
             collider.active_collision_types(
                 ActiveCollisionTypes::default()
                     | ActiveCollisionTypes::KINEMATIC_FIXED

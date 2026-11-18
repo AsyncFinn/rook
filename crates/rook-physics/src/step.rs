@@ -36,7 +36,7 @@ impl Physics {
             return;
         }
         self.playback.only = false;
-        let staged = STAGED && matches!(self.authority, Authority::Except(_));
+        let staged = STAGED && self.serves();
         self.world.physics_pipeline.counters.enabled = staged;
         let clock = staged.then(Instant::now);
         self.awake.clear();
@@ -157,10 +157,9 @@ impl Physics {
     /// or push to apply. Played assemblies alone aren't: they go where
     /// their updates have them.
     fn simulates_anything(&self) -> bool {
-        let touches_remote = matches!(self.authority, Authority::Except(_));
         let [local, remote] = self.moving;
         local > 0
-            || (touches_remote && remote > 0)
+            || (self.serves() && remote > 0)
             || !self.movers.is_empty()
             || !self.forced.is_empty()
     }

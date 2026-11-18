@@ -364,9 +364,15 @@ impl Physics {
     /// Whether stepping can move anything: an assembly this world
     /// simulates, or (on a server) one a client moves, for its touches.
     fn moves_anything(&self) -> bool {
-        let touches_remote = matches!(self.authority, Authority::Except(_));
+        let touches_remote = self.serves();
         let [local, remote] = self.moving;
         local > 0 || (touches_remote && remote > 0) || self.playback.any()
+    }
+
+    /// Whether this is a server's world: it simulates every assembly but
+    /// those clients were handed.
+    pub(crate) fn serves(&self) -> bool {
+        matches!(self.authority, Authority::Except(_))
     }
 
     /// Whether this world simulates `part`'s assembly (`false` for an
