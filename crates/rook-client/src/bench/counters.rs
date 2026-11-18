@@ -3,7 +3,7 @@
 //! large share of its collection while little in it changed, the sign of
 //! a small change paying for the whole collection.
 
-use rook_types::counters::{self, CHECKS, Counter, Counts, Kind};
+use rook_types::counters::{self, CHECKS, Counter, Counts, Kind, SERVER_STAGES};
 
 use crate::stats::thousands;
 
@@ -49,6 +49,33 @@ impl Frames {
                 c.label(),
                 thousands(median as usize),
                 thousands(max as usize)
+            );
+        }
+        let total = |c: Counter| self.0.iter().map(|f| f[c]).sum::<u64>();
+        let steps = total(Counter::ServerPhysicsSteps);
+        if steps > 0 {
+            // The median frame's share per step, and the run's mean: a
+            // frame that caught up on many slow steps sways the mean.
+            let stepped: Vec<&Counts> = (self.0.iter())
+                .filter(|f| f[Counter::ServerPhysicsSteps] > 0)
+                .collect();
+            let line: Vec<String> = (SERVER_STAGES.iter())
+                .map(|&c| {
+                    let mut per: Vec<u64> = (stepped.iter())
+                        .map(|f| f[c] / f[Counter::ServerPhysicsSteps])
+                        .collect();
+                    per.sort_unstable();
+                    format!(
+                        "{} {} / {}",
+                        c.label(),
+                        per[per.len() / 2],
+                        total(c) / steps
+                    )
+                })
+                .collect();
+            eprintln!(
+                "  per server 240 Hz step (median frame / mean over {steps} steps): {}",
+                line.join(", ")
             );
         }
         for &(touched, changed, size) in CHECKS {

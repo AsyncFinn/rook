@@ -125,6 +125,30 @@ counters! {
     /// something simulated here, one after the frame for the rest.
     PhysicsPlayedMoves: Info, "physics: played assembly moves";
 
+    /// The server's 240 Hz physics steps (`rook-physics`, with its own
+    /// `counters` feature), and what each stage of them took over the
+    /// frame, in microseconds: Rapier's stages, then Rook's own work
+    /// around each step and before the steps.
+    ServerPhysicsSteps: Info, "server physics: 240 Hz steps";
+    ServerPhysicsUs: Info, "server physics: Rapier step us";
+    ServerPhysicsBroadUs: Info, "server physics: broad phase us";
+    ServerPhysicsNarrowUs: Info, "server physics: narrow phase us";
+    ServerPhysicsIslandsUs: Info, "server physics: islands and sleep us";
+    ServerPhysicsSolverUs: Info, "server physics: solver us";
+    ServerPhysicsUpdateUs: Info, "server physics: body update us";
+    ServerPhysicsUserChangesUs: Info, "server physics: user changes us";
+    ServerPhysicsAroundUs: Info, "server physics: Rook's work around each step us";
+    ServerPhysicsBeforeUs: Info, "server physics: Rook's work before the steps us";
+    /// Bodies awake, collider pairs whose shapes touch, and joints with
+    /// an awake body, after the frame's last step.
+    ServerPhysicsAwake: Size, "server physics: awake bodies";
+    ServerPhysicsTouching: Size, "server physics: touching pairs";
+    ServerPhysicsJoints: Size, "server physics: joints with an awake body";
+    /// Collider pairs whose boxes overlap (the narrow phase's work), and
+    /// colliders on awake bodies.
+    ServerPhysicsPairs: Size, "server physics: collider pairs";
+    ServerPhysicsAwakeColliders: Size, "server physics: colliders on awake bodies";
+
     /// Sounds whose playback state was worked out again.
     SoundsUpdated: Touched, "audio: sounds updated";
     SoundsChanged: Changed, "audio: sounds changed";
@@ -145,6 +169,22 @@ counters! {
     /// sorted among the transparent parts.
     MainCuts: Info, "draws: main pass canvas cuts";
 }
+
+/// The server step's stage times, which the bench also prints per 240 Hz
+/// step over the whole run ([`Counter::ServerPhysicsSteps`] steps): the
+/// server keeps its own pace, so a frame's sum depends on how many steps
+/// fell in it.
+pub const SERVER_STAGES: &[Counter] = &[
+    Counter::ServerPhysicsUs,
+    Counter::ServerPhysicsBroadUs,
+    Counter::ServerPhysicsNarrowUs,
+    Counter::ServerPhysicsIslandsUs,
+    Counter::ServerPhysicsSolverUs,
+    Counter::ServerPhysicsUpdateUs,
+    Counter::ServerPhysicsUserChangesUs,
+    Counter::ServerPhysicsAroundUs,
+    Counter::ServerPhysicsBeforeUs,
+];
 
 /// The (touched, changed, collection) triples the bench checks for a
 /// frame that touched much of a collection while little changed.

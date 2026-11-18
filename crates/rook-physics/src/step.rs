@@ -1,5 +1,12 @@
+use std::time::{Duration, Instant};
+
 use super::*;
 use crate::assembly::bodies::SLEEP_ACCELERATION;
+
+/// Whether the server's step is split by stage into the work counters
+/// (the `counters` feature, for `--bench`): Rapier's stage timers and
+/// Rook's own clock reads, left out of other builds.
+const STAGED: bool = cfg!(feature = "counters");
 
 impl Physics {
     /// Advance the simulation by `dt` seconds in whole 240 Hz steps, the
@@ -29,13 +36,20 @@ impl Physics {
             return;
         }
         self.playback.only = false;
+        let staged = STAGED && matches!(self.authority, Authority::Except(_));
+        self.world.physics_pipeline.counters.enabled = staged;
+        let clock = staged.then(Instant::now);
         self.awake.clear();
         self.awake.extend(self.world.islands.active_bodies());
         self.build_terrain_near_bodies(dt as f32);
         self.drive_joints(dt, steps);
         let events = contacts::Collector::default();
         self.find_played_near(dt);
+        if let Some(t) = clock {
+            rook_types::count!(ServerPhysicsBeforeUs, t.elapsed().as_micros());
+        }
         for i in 0..steps {
+            let clock = staged.then(Instant::now);
             let last = i + 1 == steps;
             if last {
                 self.remember_poses();
@@ -54,10 +68,18 @@ impl Physics {
             let mixer = contacts::Mixer {
                 flying: &self.flying,
             };
+            let before = clock.map(|t| t.elapsed());
             self.world.step_with_events(&mixer, &events);
+            let clock = staged.then(Instant::now);
             self.keep_accelerating_awake(h);
             self.notice_flight(h);
             self.update_humanoids(h);
+            if let (Some(before), Some(t)) = (before, clock) {
+                self.count_stages(before + t.elapsed());
+            }
+        }
+        if staged {
+            self.gauge_work();
         }
         // Stepping put every collider in place, but for the far played
         // assemblies', placed after it.
@@ -81,6 +103,53 @@ impl Physics {
         let parts = &self.parts;
         self.touch
             .record(events.take(), &self.colliders, |p| parts.contains_key(&p));
+    }
+
+    /// Add the step just taken to the server's stage counters: Rapier's
+    /// stage timers, and `around`, Rook's own work around it.
+    fn count_stages(&self, around: Duration) {
+        let c = &self.world.physics_pipeline.counters;
+        let us = |d: Duration| d.as_micros();
+        rook_types::count!(ServerPhysicsSteps, 1);
+        rook_types::count!(ServerPhysicsUs, us(c.step_time.time()));
+        rook_types::count!(
+            ServerPhysicsBroadUs,
+            us(c.cd.broad_phase_time.time() + c.cd.final_broad_phase_time.time())
+        );
+        rook_types::count!(ServerPhysicsNarrowUs, us(c.cd.narrow_phase_time.time()));
+        rook_types::count!(
+            ServerPhysicsIslandsUs,
+            us(c.stages.island_construction_time.time()
+                + c.stages.island_constraints_collection_time.time())
+        );
+        rook_types::count!(ServerPhysicsSolverUs, us(c.stages.solver_time.time()));
+        rook_types::count!(ServerPhysicsUpdateUs, us(c.stages.update_time.time()));
+        rook_types::count!(ServerPhysicsUserChangesUs, us(c.stages.user_changes.time()));
+        rook_types::count!(ServerPhysicsAroundUs, us(around));
+    }
+
+    /// What the server's steps worked on, after the frame's last: bodies
+    /// awake and their colliders, collider pairs overlapping and
+    /// touching, and joints with an awake body.
+    fn gauge_work(&self) {
+        let w = &self.world;
+        let awake = |b| {
+            w.bodies
+                .get(b)
+                .is_some_and(|rb| rb.is_dynamic() && !rb.is_sleeping())
+        };
+        rook_types::gauge!(ServerPhysicsAwake, w.islands.active_bodies().count());
+        let touching = w
+            .narrow_phase
+            .contact_pairs()
+            .filter(|p| p.has_any_active_contact());
+        rook_types::gauge!(ServerPhysicsTouching, touching.count());
+        let joints =
+            (w.impulse_joints.iter()).filter(|(_, j)| awake(j.body1()) || awake(j.body2()));
+        rook_types::gauge!(ServerPhysicsJoints, joints.count());
+        rook_types::gauge!(ServerPhysicsPairs, w.narrow_phase.contact_pairs().count());
+        let colliders = (w.islands.active_bodies()).map(|b| w.bodies[b].colliders().len());
+        rook_types::gauge!(ServerPhysicsAwakeColliders, colliders.sum::<usize>());
     }
 
     /// Whether a step has anything to simulate: an unanchored assembly of

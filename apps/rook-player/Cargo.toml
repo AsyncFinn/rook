@@ -38,7 +38,7 @@ repl = ["rook-engine/repl", "rook-client/repl"]
 # Developer settings (rook-engine's feature of the same name).
 developer-overrides = ["rook-engine/developer-overrides"]
 # Per-frame work counters, which `--bench` prints (rook-types' `counters`).
-counters = ["rook-types/counters"]
+counters = ["rook-types/counters", "rook-engine/counters"]
 # A build for other people: `cargo dist`.
 published = ["rook-engine/published"]
 # Live per-frame timeline in the Tracy profiler (https://github.com/wolfpld/tracy).

@@ -56,6 +56,9 @@ developer-overrides = []
 # A build for other people (`cargo dist`), which must not have
 # `developer-overrides`.
 published = []
+# The server physics step's stages in the work counters (rook-physics'
+# feature of the same name).
+counters = ["rook-physics/counters"]
 
 [lints]
 workspace = true

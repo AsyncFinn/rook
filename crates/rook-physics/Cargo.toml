@@ -22,6 +22,11 @@ profiling.workspace = true
 tracing.workspace = true
 thiserror.workspace = true
 
+[features]
+# The server step's stages in the work counters, which `--bench` prints
+# (rook-types' `counters`, and Rapier's stage timers).
+counters = ["rook-types/counters", "rapier3d/profiler"]
+
 [dev-dependencies]
 rook-types = { workspace = true, features = ["counters"] }
 rook-platform = { workspace = true, features = ["native"] }
