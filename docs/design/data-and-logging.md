@@ -26,7 +26,7 @@ Everything Rook keeps for itself lives in one folder: `%LOCALAPPDATA%\Rook` on W
 │     ├─ blobs\<first 2 hex>\<blake3>
 │     └─ refs\asset-<id>-v<version>
 └─ state\
-   └─ repl-history.txt
+   └─ command-bar-history.txt
 ```
 
 On macOS the data is in `~/Library/Application Support/Rook` and the logs in `~/Library/Logs/Rook`. On Linux the data is in `$XDG_DATA_HOME/rook`, and logs and state in `$XDG_STATE_HOME/rook`. The `directories` crate finds those folders. `ROOK_DATA_DIR` moves all of it under one folder, in builds with [developer overrides](#developer-overrides).

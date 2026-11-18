@@ -5,6 +5,8 @@ Every release, newest first. How versions are numbered is in
 
 ## [Unreleased]
 
+- `rook` run with nothing after it in a terminal prints its help. Rook opened a window asking for a place, which only makes sense when `rook.exe` is opened from Explorer, where it still does.
+- The command-line prompt draws without flashing, Ctrl+Backspace deletes a word, Ctrl+J adds a line, and pasted text goes in whole, its newlines included. The prompt blinked on every key in Windows terminals, Ctrl+Backspace did nothing, and a pasted line could run before the rest arrived. Entries kept from earlier runs start over. See [getting started](docs/guide/getting-started.md#command-bar).
 ## [0.5.0] - 2026-11-17
 
 Checked against Roblox 0.744.0.

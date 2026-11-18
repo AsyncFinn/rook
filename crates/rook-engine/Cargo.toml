@@ -34,7 +34,8 @@ tracing.workspace = true
 tracing-subscriber.workspace = true
 directories.workspace = true
 serde_json.workspace = true
-rustyline = { workspace = true, optional = true }
+reedline = { workspace = true, optional = true }
+nu-ansi-term = { workspace = true, optional = true }
 
 [build-dependencies]
 rustc-hash.workspace = true
@@ -47,7 +48,7 @@ rook-platform = { workspace = true, features = ["native"] }
 # The terminal command bar (`repl` module): Luau typed at the terminal runs
 # in the game. Apps turn it on by default; leave it out of builds you hand
 # to others.
-repl = ["dep:rustyline"]
+repl = ["dep:reedline", "dep:nu-ansi-term"]
 # Flags, variables and settings-file keys of the developer tier
 # (`settings::Tier::Developer`), and Roblox's CoreScripts. The apps turn it
 # on by default, so `cargo build --release` takes them; `cargo dist` leaves

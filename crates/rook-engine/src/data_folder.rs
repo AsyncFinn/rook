@@ -107,7 +107,7 @@ impl DataDir {
     }
 
     pub fn repl_history(&self) -> PathBuf {
-        self.state.join("repl-history.txt")
+        self.state.join("command-bar-history.txt")
     }
 
     pub fn recent(&self) -> PathBuf {
