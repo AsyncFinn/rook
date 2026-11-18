@@ -1,190 +1,241 @@
-//! The line editor: rustyline with Luau colors, a multi-line buffer that
+//! The line editor: reedline with Luau colors, a multi-line buffer that
 //! Enter runs only once the code is complete, and keys for choosing
-//! yourself (Shift, Ctrl or Alt+Enter add a line).
+//! yourself (Ctrl+J, or Shift, Ctrl or Alt+Enter, add a line).
 //!
-//! Pasting: terminals that support bracketed paste (most on Linux and
-//! macOS) hand rustyline the whole text at once. Windows terminals type it
-//! in key by key, and rustyline redraws the whole buffer after each key.
-//! So a key takes with it the text already waiting behind it
-//! (`rook_platform::console::take_typed_text`) and all of it goes in as one
-//! edit, drawn once. A pasted newline would also arrive as Enter and run
-//! the code so far on its own, losing its `local`s: an Enter with text
-//! waiting behind it, or one that arrives right after the key before it,
-//! was pasted, not typed, and adds a line instead.
+//! Pasting: terminals that support bracketed paste hand the whole text over
+//! at once. Windows terminals type it in key by key, so a pasted newline
+//! arrives as Enter and would run the code so far on its own, losing its
+//! `local`s. [`PasteBurst`] tells reedline which keys were pasted, from how
+//! fast they arrive, so the paste goes in as one edit with its newlines.
 
 use std::borrow::Cow;
-use std::sync::{Arc, Mutex};
+use std::io;
+use std::path::PathBuf;
+use std::sync::mpsc::{Receiver, Sender, channel};
+use std::sync::{Arc, Mutex, PoisonError};
 use std::time::{Duration, Instant};
 
-use rustyline::completion::Completer;
-use rustyline::highlight::{CmdKind, Highlighter};
-use rustyline::hint::Hinter;
-use rustyline::history::FileHistory;
-use rustyline::validate::{ValidationContext, ValidationResult, Validator};
-use rustyline::{
-    Cmd, ConditionalEventHandler, Editor, Event, EventContext, EventHandler, Helper, KeyCode,
-    KeyEvent, Modifiers, Movement, RepeatCount,
+use mlua::chunk::Compiler;
+use nu_ansi_term::Color;
+use reedline::{
+    EditCommand, Emacs, ExternalOutput, FileBackedHistory, Highlighter, KeyCode, KeyModifiers,
+    PasteBurstHook, Prompt, PromptEditMode, PromptHistorySearch, Reedline, ReedlineEvent,
+    StyledText, ValidationResult, Validator, default_emacs_keybindings,
 };
 
-use super::{highlight, is_unfinished};
+use super::highlight;
 
-/// How soon after the previous key an Enter counts as pasted. Typing a key
+/// Two keys arriving closer together than this were pasted. Typing a key
 /// and then Enter takes people 50 ms at the very least; a pasted text's
-/// keys arrive as fast as the editor redraws.
+/// keys arrive together.
 const PASTE_GAP: Duration = Duration::from_millis(25);
+/// Machine-fast keys in a row that make a paste, from then on gathered
+/// into one edit.
+const PASTE_KEYS: usize = 6;
+/// History entries kept, oldest dropped first.
+const HISTORY_SIZE: usize = 1000;
 
-pub(super) fn new() -> rustyline::Result<Editor<Luau, FileHistory>> {
-    let mut editor = Editor::new()?;
-    editor.set_helper(Some(Luau {
-        checker: mlua::Lua::new(),
-    }));
-    for modifier in [Modifiers::SHIFT, Modifiers::CTRL, Modifiers::ALT] {
-        editor.bind_sequence(KeyEvent(KeyCode::Enter, modifier), Cmd::Newline);
+/// The editor, and where to send lines to print above its prompt.
+pub(super) fn new(history: Option<PathBuf>) -> (Reedline, Sender<String>) {
+    let mut keys = default_emacs_keybindings();
+    let newline = ReedlineEvent::Edit(vec![EditCommand::InsertNewline]);
+    // Ctrl+J types a line feed, which terminals send apart from Enter even
+    // where they drop Shift from Shift+Enter (Windows Terminal), so it adds
+    // a line everywhere. Shift and Alt+Enter already do.
+    keys.add_binding(KeyModifiers::CONTROL, KeyCode::Char('j'), newline.clone());
+    keys.add_binding(KeyModifiers::CONTROL, KeyCode::Enter, newline);
+    // Ctrl+C is also what people press to copy a line of output, so it
+    // clears what's typed and leaves the prompt open (Ctrl+D ends input).
+    keys.add_binding(
+        KeyModifiers::CONTROL,
+        KeyCode::Char('c'),
+        ReedlineEvent::Edit(vec![EditCommand::Clear]),
+    );
+    let (sender, output) = channel();
+    let mut editor = Reedline::create()
+        .with_edit_mode(Box::new(Emacs::new(keys)))
+        .with_highlighter(Box::new(Luau))
+        .with_validator(Box::new(Complete {
+            compiler: Compiler::new(),
+        }))
+        .with_paste_burst(Arc::new(PasteBurst::default()))
+        .use_bracketed_paste(true)
+        .with_external_printer(Output(output));
+    if let Some(path) = history {
+        match FileBackedHistory::with_file(HISTORY_SIZE, path.clone()) {
+            Ok(history) => editor = editor.with_history(Box::new(history)),
+            Err(e) => tracing::debug!(target: "rook", "couldn't read {}: {e}", path.display()),
+        }
     }
-    let keys = Arc::new(KeyClock::default());
-    // Ctrl+J and Ctrl+M are Enter too, and some terminals type a pasted
-    // newline as one of them.
-    for enter in [
-        KeyEvent(KeyCode::Enter, Modifiers::NONE),
-        KeyEvent::ctrl('J'),
-        KeyEvent::ctrl('M'),
-    ] {
-        editor.bind_sequence(
-            enter,
-            EventHandler::Conditional(Box::new(Enter(keys.clone()))),
-        );
+    (editor, sender)
+}
+
+/// The `> ` prompt, and `>> ` on each further line.
+pub(super) struct LuauPrompt;
+
+impl Prompt for LuauPrompt {
+    fn render_prompt_left(&self) -> Cow<'_, str> {
+        Cow::Borrowed("")
     }
-    editor.bind_sequence(
-        KeyEvent(KeyCode::Tab, Modifiers::NONE),
-        EventHandler::Conditional(Box::new(Typed {
-            keys: keys.clone(),
-            first: Some('\t'),
-        })),
-    );
-    editor.bind_sequence(
-        Event::Any,
-        EventHandler::Conditional(Box::new(Typed { keys, first: None })),
-    );
-    editor.bind_sequence(
-        KeyEvent::ctrl('C'),
-        EventHandler::Conditional(Box::new(Interrupt)),
-    );
-    Ok(editor)
+
+    fn render_prompt_right(&self) -> Cow<'_, str> {
+        Cow::Borrowed("")
+    }
+
+    fn render_prompt_indicator(&self, _: PromptEditMode) -> Cow<'_, str> {
+        Cow::Borrowed("> ")
+    }
+
+    fn render_prompt_multiline_indicator(&self) -> Cow<'_, str> {
+        Cow::Borrowed(">> ")
+    }
+
+    fn render_prompt_history_search_indicator(&self, _: PromptHistorySearch) -> Cow<'_, str> {
+        Cow::Borrowed("? ")
+    }
+
+    // The prompt in the terminal's own text color, as Luau's REPL draws it.
+    fn get_prompt_color(&self) -> Color {
+        Color::Default
+    }
+
+    fn get_prompt_multiline_color(&self) -> Color {
+        Color::Default
+    }
+
+    fn get_indicator_color(&self) -> Color {
+        Color::Default
+    }
 }
 
-#[derive(Debug)]
-pub(super) struct Luau {
-    /// A VM of the editor's own, only for checking whether input is complete.
-    checker: mlua::Lua,
-}
-
-impl Helper for Luau {}
-
-impl Completer for Luau {
-    type Candidate = String;
-}
-
-impl Hinter for Luau {
-    type Hint = String;
-}
+struct Luau;
 
 impl Highlighter for Luau {
-    fn highlight<'l>(&self, line: &'l str, _pos: usize) -> Cow<'l, str> {
-        Cow::Owned(highlight::highlight(line))
-    }
-
-    fn highlight_char(&self, _line: &str, _pos: usize, kind: CmdKind) -> bool {
-        kind != CmdKind::MoveCursor
+    fn highlight(&self, line: &str, _cursor: usize) -> StyledText {
+        highlight::highlight(line)
     }
 }
 
-impl Validator for Luau {
-    /// Unfinished code gets another line; anything else runs, compile
-    /// errors included, so they're reported as in Studio's command bar.
-    fn validate(&self, ctx: &mut ValidationContext) -> rustyline::Result<ValidationResult> {
-        Ok(if is_unfinished(&self.checker, ctx.input()) {
+/// Unfinished code gets another line; anything else runs, compile errors
+/// included, so they're reported as in Studio's command bar.
+struct Complete {
+    /// Compiles without a VM, so the editor's thread needs no Lua state.
+    compiler: Compiler,
+}
+
+impl Validator for Complete {
+    fn validate(&self, line: &str) -> ValidationResult {
+        if is_unfinished(&self.compiler, line) {
             ValidationResult::Incomplete
         } else {
-            ValidationResult::Valid(None)
-        })
+            ValidationResult::Complete
+        }
     }
 }
 
-/// When the last key arrived.
-#[derive(Debug, Default)]
-struct KeyClock(Mutex<Option<Instant>>);
+/// Whether `source` only fails to compile because it ends too soon (an
+/// open `do`, `function`, table or string), so Enter should add a line,
+/// as in Luau's REPL.
+fn is_unfinished(compiler: &Compiler, source: &str) -> bool {
+    if source.trim_start().starts_with(':') {
+        return false;
+    }
+    // `Err(true)` when it ends too soon.
+    let compiles = |s: &str| {
+        compiler.compile(s).map(drop).map_err(|e| {
+            matches!(
+                e,
+                mlua::Error::SyntaxError {
+                    incomplete_input: true,
+                    ..
+                }
+            )
+        })
+    };
+    // An expression compiles as `return` and one.
+    match (compiles(source), compiles(&format!("return {source}"))) {
+        (Ok(()), _) | (_, Ok(())) => false,
+        (Err(ends_too_soon), _) => ends_too_soon,
+    }
+}
 
-impl KeyClock {
-    /// Note a key at `now`, and whether it followed the previous one within
-    /// [`PASTE_GAP`].
-    fn press(&self, now: Instant) -> bool {
-        let mut last = self
-            .0
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let pasted = last.is_some_and(|last| now.duration_since(last) < PASTE_GAP);
-        *last = Some(now);
+/// Lines to print above the prompt. Unbounded, so the engine never waits
+/// on the terminal to print.
+struct Output(Receiver<String>);
+
+impl ExternalOutput for Output {
+    fn drain(&mut self) -> io::Result<Vec<String>> {
+        Ok(self.0.try_iter().collect())
+    }
+}
+
+/// Tells a paste typed in as keys from typing, by how fast the keys come.
+#[derive(Default)]
+struct PasteBurst(Mutex<Burst>);
+
+#[derive(Default)]
+struct Burst {
+    /// When the last of a run of quick keys arrived.
+    last: Option<Instant>,
+    /// How many keys that run holds.
+    keys: usize,
+    /// A paste is being gathered, until reedline settles it.
+    pasting: bool,
+}
+
+impl Burst {
+    fn quick(&self, now: Instant) -> bool {
+        self.last
+            .is_some_and(|last| now.duration_since(last) < PASTE_GAP)
+    }
+
+    fn key(&mut self, now: Instant) {
+        self.keys = if self.quick(now) { self.keys + 1 } else { 1 };
+        self.last = Some(now);
+        self.pasting |= self.keys >= PASTE_KEYS;
+    }
+
+    /// Whether an Enter at `now` was pasted. A short paste never counts
+    /// as one, but its Enters still come right behind its keys.
+    fn enter_is_newline(&mut self, now: Instant) -> bool {
+        let pasted = self.pasting || self.quick(now);
+        if pasted {
+            // The next pasted line continues the run.
+            self.last = Some(now);
+        }
         pasted
     }
 }
 
-/// `first` and the text waiting behind it as one insertion, if any waits.
-fn with_waiting(first: char) -> Option<Cmd> {
-    let rest = rook_platform::console::take_typed_text();
-    (!rest.is_empty()).then(|| Cmd::Insert(1, format!("{first}{rest}")))
-}
-
-/// Any key but Enter. `first` is the character the bound key types;
-/// `None` takes it from the key.
-#[derive(Debug)]
-struct Typed {
-    keys: Arc<KeyClock>,
-    first: Option<char>,
-}
-
-impl ConditionalEventHandler for Typed {
-    /// A character with text waiting behind it goes in with that text;
-    /// one alone, or any other key, does what it always does.
-    fn handle(&self, evt: &Event, _: RepeatCount, _: bool, _: &EventContext) -> Option<Cmd> {
-        self.keys.press(Instant::now());
-        let first = self.first.or_else(|| match evt.get(0)? {
-            KeyEvent(KeyCode::Char(c), Modifiers::NONE | Modifiers::SHIFT) => Some(*c),
-            _ => None,
-        })?;
-        with_waiting(first)
+impl PasteBurst {
+    fn burst(&self) -> std::sync::MutexGuard<'_, Burst> {
+        self.0.lock().unwrap_or_else(PoisonError::into_inner)
     }
 }
 
-#[derive(Debug)]
-struct Enter(Arc<KeyClock>);
-
-impl ConditionalEventHandler for Enter {
-    /// A pasted Enter adds a line, with the text waiting behind it; a
-    /// typed one does what Enter does.
-    fn handle(&self, _: &Event, _: RepeatCount, _: bool, _: &EventContext) -> Option<Cmd> {
-        let pasted = self.0.press(Instant::now());
-        with_waiting('\n').or(pasted.then_some(Cmd::Newline))
+impl PasteBurstHook for PasteBurst {
+    fn on_char(&self, _: char) {
+        self.burst().key(Instant::now());
     }
-}
 
-/// Ctrl+C clears what's typed, all its lines, and does nothing on an
-/// empty prompt: Ctrl+C is also what people press to copy a line of
-/// output, and ending input there closed the command bar for good (Ctrl+D
-/// still ends it).
-#[derive(Debug)]
-struct Interrupt;
-
-impl ConditionalEventHandler for Interrupt {
-    fn handle(&self, _: &Event, _: RepeatCount, _: bool, ctx: &EventContext) -> Option<Cmd> {
-        Some(interrupt(ctx.line()))
+    fn enter_is_newline(&self) -> bool {
+        self.burst().enter_is_newline(Instant::now())
     }
-}
 
-fn interrupt(line: &str) -> Cmd {
-    if line.is_empty() {
-        Cmd::Noop
-    } else {
-        Cmd::Kill(Movement::WholeBuffer)
+    fn is_burst_active(&self) -> bool {
+        self.burst().pasting
+    }
+
+    fn poll_timeout(&self) -> Duration {
+        PASTE_GAP
+    }
+
+    fn settle(&self) {
+        *self.burst() = Burst::default();
+    }
+
+    fn resolve_burst(&self, _: &str) -> Option<String> {
+        None
     }
 }
 
@@ -193,17 +244,49 @@ mod tests {
     use super::*;
 
     #[test]
-    fn only_quick_keys_count_as_pasted() {
-        let clock = KeyClock::default();
-        let start = Instant::now();
-        assert!(!clock.press(start));
-        assert!(clock.press(start + Duration::from_millis(1)));
-        assert!(!clock.press(start + Duration::from_millis(200)));
+    fn unfinished_statements_ask_for_more() {
+        let compiler = Compiler::new();
+        for open in [
+            "for i = 1, 3 do",
+            "local t = {",
+            "function f()",
+            "if x then print(1)",
+            "x = 1 +",
+            "print(",
+        ] {
+            assert!(is_unfinished(&compiler, open), "{open}");
+        }
+        for done in [
+            "for i = 1, 3 do end",
+            "1 + 1",
+            "local x = 5",
+            ":client",
+            "local = 1",
+            "end",
+        ] {
+            assert!(!is_unfinished(&compiler, done), "{done}");
+        }
     }
 
     #[test]
-    fn ctrl_c_on_an_empty_prompt_keeps_it_open() {
-        assert_eq!(interrupt(""), Cmd::Noop);
-        assert_eq!(interrupt("x"), Cmd::Kill(Movement::WholeBuffer));
+    fn only_quick_keys_make_a_paste() {
+        let start = Instant::now();
+        let ms = |n| start + Duration::from_millis(n);
+        let mut burst = Burst::default();
+        for n in 0..PASTE_KEYS as u64 - 1 {
+            burst.key(ms(n));
+        }
+        assert!(!burst.pasting);
+        // A short paste's Enter, right behind its keys, adds a line.
+        assert!(burst.enter_is_newline(ms(5)));
+        burst.key(ms(6));
+        assert!(burst.pasting);
+
+        let mut typed = Burst::default();
+        for n in 0..10 {
+            typed.key(ms(n * 100));
+        }
+        assert!(!typed.pasting);
+        assert!(!typed.enter_is_newline(ms(1000)));
     }
 }

@@ -1,7 +1,7 @@
 //! The command bar: Luau typed at the terminal and run in a live
 //! DataModel, like Roblox Studio's command bar, with the feel of Luau's own
 //! REPL: a `> ` prompt with colored, multi-line editing ([`editor`]) and
-//! history, kept between runs in the data folder (`state/repl-history.txt`).
+//! history, kept between runs in the data folder (`state/command-bar-history.txt`).
 //! Output prints above the prompt.
 //!
 //! Built only with the `repl` feature (on by default in the apps; build
@@ -13,9 +13,8 @@
 use std::io::IsTerminal;
 use std::sync::mpsc::{Receiver, Sender, TryRecvError, channel};
 
+use reedline::Signal;
 use rook_lua::MessageType;
-use rustyline::ExternalPrinter;
-use rustyline::error::ReadlineError;
 
 use crate::DataModel;
 use crate::console::{print_message, set_output};
@@ -31,7 +30,8 @@ pub enum Side {
 
 const HELP: &str = "Type Luau to run it; an expression prints its value. \
                     :server and :client choose where commands run (server by default), \
-                    :help shows this. Ctrl+C clears the line; Ctrl+D on an empty line ends input.";
+                    :help shows this. Ctrl+J adds a line without running. \
+                    Ctrl+C clears the line; Ctrl+D on an empty line ends input.";
 
 #[derive(Debug)]
 pub struct Repl {
@@ -105,68 +105,35 @@ impl Repl {
 /// The reader thread: prompt, let the editor collect a complete chunk, and
 /// send it to the engine.
 fn read(tx: &Sender<String>) {
-    let Ok(mut editor) = editor::new() else {
-        return;
-    };
-    if let Ok(mut printer) = editor.create_external_printer() {
-        set_output(Some(Box::new(move |line| {
-            // Fails only once the prompt has closed, with nowhere to print.
-            let _ = printer.print(line);
-        })));
-    }
     // History from earlier runs, kept in the data folder's state.
     let history = crate::data_folder::DataDir::locate().map(|d| d.repl_history());
-    if let Some(path) = &history
-        && rook_platform::get().files.exists(path)
-        && let Err(e) = editor.load_history(path)
-    {
-        tracing::debug!(target: "rook", "couldn't read {}: {e}", path.display());
-    }
-    loop {
-        let chunk = match editor.readline("> ") {
-            Ok(chunk) => chunk,
-            Err(ReadlineError::Eof) => break,
-            // Not from a key (Ctrl+C on an empty prompt does nothing).
-            Err(ReadlineError::Interrupted) => continue,
-            Err(e) => {
-                print_message(
-                    MessageType::Warning,
-                    &format!("The command bar stopped reading the terminal: {e}"),
-                );
-                break;
+    let (mut editor, printer) = editor::new(history);
+    set_output(Some(Box::new(move |line| {
+        // Fails only once the prompt has closed, with nowhere to print.
+        let _ = printer.send(line);
+    })));
+    let stopped = loop {
+        match editor.read_line(&editor::LuauPrompt) {
+            Ok(Signal::Success(chunk)) => {
+                if tx.send(chunk).is_err() {
+                    break None;
+                }
             }
-        };
-        if !chunk.trim().is_empty()
-            && editor.add_history_entry(chunk.as_str()).unwrap_or(false)
-            && let Some(path) = &history
-        {
-            let saved = path
-                .parent()
-                .map_or(Ok(()), |dir| rook_platform::get().files.create_dir_all(dir))
-                .map_err(ReadlineError::from)
-                .and_then(|()| editor.append_history(path));
-            if let Err(e) = saved {
-                tracing::debug!(target: "rook", "couldn't save {}: {e}", path.display());
-            }
+            Ok(Signal::CtrlD) => break None,
+            // Ctrl+C clears the line without ending it (see `editor`).
+            Ok(_) => {}
+            Err(e) => break Some(e),
         }
-        if tx.send(chunk).is_err() {
-            break;
-        }
-    }
+    };
+    // Output goes back to the terminal, restored, before anything more
+    // prints.
     set_output(None);
-}
-
-/// Whether `source` only fails to compile because it ends too soon (an
-/// open `do`, `function`, table or string), so Enter should add a line,
-/// as in Luau's REPL.
-fn is_unfinished(lua: &mlua::Lua, source: &str) -> bool {
-    if source.trim_start().starts_with(':') {
-        return false;
-    }
-    let compiles = |s: &str| lua.load(s).into_function().map_err(|e| e.to_string());
-    match (compiles(source), compiles(&format!("return {source}"))) {
-        (Ok(_), _) | (_, Ok(_)) => false,
-        (Err(e), _) => e.contains("got <eof>"),
+    drop(editor);
+    if let Some(e) = stopped {
+        print_message(
+            MessageType::Warning,
+            &format!("The command bar stopped reading the terminal: {e}"),
+        );
     }
 }
 
@@ -210,31 +177,6 @@ mod tests {
         run_line(&dm, "print('hi')").unwrap();
         assert_eq!(output(&dm), ["2 two", "10", "hi"]);
         assert!(run_line(&dm, "local = 1").is_err());
-    }
-
-    #[test]
-    fn unfinished_statements_ask_for_more() {
-        let lua = mlua::Lua::new();
-        for open in [
-            "for i = 1, 3 do",
-            "local t = {",
-            "function f()",
-            "if x then print(1)",
-            "x = 1 +",
-        ] {
-            assert!(is_unfinished(&lua, open), "{open}");
-        }
-        for done in [
-            "for i = 1, 3 do end",
-            "1 + 1",
-            "print(",
-            ":client",
-            "local = 1",
-            "end",
-        ] {
-            let unfinished = is_unfinished(&lua, done);
-            assert_eq!(unfinished, done == "print(", "{done}");
-        }
     }
 
     #[test]
