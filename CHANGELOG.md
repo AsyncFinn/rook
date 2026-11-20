@@ -5,6 +5,8 @@ Every release, newest first. How versions are numbered is in
 
 ## [Unreleased]
 
+- A script reading a GUI object's `AbsoluteSize`, `AbsolutePosition`, `TextBounds` or another laid-out property no longer stalls the game. The read laid out every GUI that had changed, and could lay out a GUI kept in storage again on every read; now it lays out only what changed in the object's own GUI, and nothing when nothing did.
+
 ## [0.5.1] - 2026-11-18
 
 Checked against Roblox 0.744.0.

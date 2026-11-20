@@ -396,7 +396,7 @@ fn trees_coming_and_going_leave_the_others() {
     assert_eq!(step(&mut dom, &mut gui), [true, true, true]);
     dom.set_parent(added, None).unwrap();
     assert_eq!(step(&mut dom, &mut gui), [true]);
-    assert!(!gui.layout.contains(mover));
+    assert!(!gui.layout.placed.contains_key(&mover));
 }
 
 /// GUI added to, moved in or taken out of a list deep in a big ScreenGui

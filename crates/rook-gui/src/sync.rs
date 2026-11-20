@@ -31,52 +31,166 @@ impl Gui {
         self.note_changes(dom);
         rook_types::gauge!(GuiNodes, self.layout.placed.len());
         if self.stale {
-            profiling::scope!("Gui::layout");
-            self.in_world.retain(|&id| world::held_where_drawn(dom, id));
-            self.messages.retain(|&id| dom.parent(id).is_some());
-            // A server draws no world GUI: it lays one out only when a
-            // script reads it, as it does GUI in storage.
-            let mut world: Vec<InstanceId> = match dom.local_player() {
-                Some(_) => self.in_world.iter().copied().collect(),
-                None => Vec::new(),
-            };
-            world.sort_unstable();
-            let previous = (&self.layout, &self.turning);
-            self.layout = Layout::screens(dom, previous, &mut self.fonts, &world);
-            // The screen they're laid out on changed: everything did.
-            rook_types::count!(GuiObjectsChanged, self.layout.placed.len());
-            self.stale = false;
-            self.moved.clear();
-            self.changed.clear();
-            self.shifted.clear();
-            self.restyled.clear();
-            self.retexted.clear();
-            self.laid_out += 1;
-            self.world_listed += 1;
-            self.screen.forget();
-            self.canvases.clear();
-            self.write(dom);
+            self.lay_out_screens(dom);
+        }
+        self.sort_pending(dom);
+        let pending = (std::mem::take(&mut self.pending).into_values())
+            .fold(Pending::default(), Pending::merge);
+        let (relaid, placed) = self.lay_out_pending(dom, pending);
+        // Text laid out above already has its new look.
+        let retexted: Vec<InstanceId> = (std::mem::take(&mut self.retexted).into_iter())
+            .filter(|&id| {
+                placed.binary_search(&id).is_err()
+                    && layout::top_of(dom, id)
+                        .is_some_and(|top| relaid.binary_search(&top).is_err())
+            })
+            .collect();
+        if !retexted.is_empty() {
+            self.layout
+                .restyle_texts(dom, &retexted, (&mut self.fonts, &self.turning));
+            self.restyled.extend(retexted);
+        }
+        let restyled: Vec<InstanceId> = std::mem::take(&mut self.restyled).into_iter().collect();
+        self.repaint(dom, &restyled, false);
+        self.resize_world(dom, None);
+    }
+
+    /// Bring up to date what reading `id`'s layout outputs depends on: its
+    /// own tree, laid out again where it changed, or whole when the screen
+    /// changed size or it isn't on one and hasn't been laid out yet, as
+    /// browsers lay out only the dirty part a script's read needs. Other
+    /// trees wait for the frame's [`Gui::sync`]; with nothing changed this
+    /// is a lookup.
+    pub fn sync_for(&mut self, dom: &mut Dom, id: InstanceId) {
+        self.note_changes(dom);
+        let Some(top) = layout::top_of(dom, id) else {
+            return;
+        };
+        self.sort_pending(dom);
+        let pending = self.pending.remove(&Some(top));
+        let stale = self.stale && !self.fresh.contains(&top);
+        if stale || !self.layout.placed.contains_key(&top) {
+            // Unparented, kept in storage, or a server's world GUI: laid
+            // out when first read, then kept up to date as a screen's is.
+            // On a stale screen, the frame's layout keeps it.
+            profiling::scope!("Gui::layout tree read");
+            (self.layout).redo(dom, &[top], (&mut self.fonts, &self.turning));
+            self.write_trees(dom, &[top]);
+            if self.stale {
+                self.fresh.insert(top);
+            }
             return;
         }
-        let joined = self.take_moved(dom);
-        let (shifted, whole) = self.layout.alone(dom, std::mem::take(&mut self.shifted));
-        self.changed.extend(whole);
+        if let Some(pending) = pending {
+            self.lay_out_pending(dom, pending);
+        }
+        self.resize_world(dom, Some(top));
+    }
+
+    /// Lay out every screen's GUI and the world GUIs drawn on the screen
+    /// as it is now, but the trees reads laid out since it changed, which
+    /// are kept with what changed in them since.
+    fn lay_out_screens(&mut self, dom: &mut Dom) {
+        profiling::scope!("Gui::layout");
+        if !self.fresh.is_empty() {
+            // What moved is taken out of where it was, and filed.
+            self.sort_pending(dom);
+        }
+        self.in_world.retain(|&id| world::held_where_drawn(dom, id));
+        self.messages.retain(|&id| dom.parent(id).is_some());
+        // A server draws no world GUI: it lays one out only when a
+        // script reads it, as it does GUI in storage.
+        let mut world: Vec<InstanceId> = match dom.local_player() {
+            Some(_) => self.in_world.iter().copied().collect(),
+            None => Vec::new(),
+        };
+        world.sort_unstable();
+        let mut previous = std::mem::take(&mut self.layout);
+        let (layout, kept) = Layout::screens(
+            dom,
+            (&mut previous, &self.turning),
+            &mut self.fonts,
+            &world,
+            &self.fresh,
+        );
+        self.layout = layout;
+        // The screen they're laid out on changed: everything did.
+        rook_types::count!(GuiObjectsChanged, self.layout.placed.len());
+        self.stale = false;
+        self.fresh.clear();
+        self.moved.clear();
+        self.changed.clear();
+        self.shifted.clear();
+        let kept: FxHashSet<InstanceId> = kept.into_iter().collect();
+        self.pending
+            .retain(|tree, _| tree.is_some_and(|t| kept.contains(&t)));
+        if kept.is_empty() {
+            self.retexted.clear();
+        } else {
+            (self.retexted)
+                .retain(|&id| layout::top_of(dom, id).is_some_and(|t| kept.contains(&t)));
+        }
+        self.restyled.clear();
+        self.laid_out += 1;
+        self.world_listed += 1;
+        self.screen.forget();
+        self.canvases.clear();
+        self.write(dom);
+    }
+
+    /// File what changed since the last layout under the tree it's in, so
+    /// a read can lay out its own tree alone. Each object's tree is found
+    /// once. GUI that moved in the tree is first taken out of where it
+    /// was laid out (see [`Gui::take_moved`]).
+    fn sort_pending(&mut self, dom: &Dom) {
+        for top in self.take_moved(dom) {
+            self.pending.entry(Some(top)).or_default().joined.push(top);
+        }
+        for id in std::mem::take(&mut self.changed) {
+            let tree = layout::top_of(dom, id);
+            self.pending.entry(tree).or_default().changed.push(id);
+        }
+        for id in std::mem::take(&mut self.shifted) {
+            let tree = layout::top_of(dom, id);
+            self.pending.entry(tree).or_default().shifted.push(id);
+        }
+    }
+
+    /// Lay out again what `pending` names: trees whole where they must
+    /// be, objects alone where they can be. Returns the trees laid out
+    /// whole and the objects placed alone, each sorted.
+    fn lay_out_pending(
+        &mut self,
+        dom: &mut Dom,
+        mut pending: Pending,
+    ) -> (Vec<InstanceId>, Vec<InstanceId>) {
+        // Some may have been freed since they were filed.
+        for ids in [
+            &mut pending.changed,
+            &mut pending.shifted,
+            &mut pending.joined,
+        ] {
+            ids.retain(|&id| dom.get(id).is_some());
+            ids.sort_unstable();
+            ids.dedup();
+        }
+        let (shifted, whole) = self.layout.alone(dom, pending.shifted);
+        let mut touched = pending.changed;
+        touched.extend(whole);
         // Trees not laid out (in storage, or a server's world GUI) wait for
         // a script to read them.
-        let touched: Vec<InstanceId> = std::mem::take(&mut self.changed).into_iter().collect();
-        let mut changed: Vec<InstanceId> = (tops(dom, touched.iter().copied().collect()))
+        let mut relaid: Vec<InstanceId> = (tops(dom, touched.iter().copied().collect()))
             .into_iter()
             .filter(|top| self.layout.placed.contains_key(top))
-            .chain(joined)
+            .chain(pending.joined)
             .collect();
-        changed.sort_unstable();
-        changed.dedup();
-        let relaid: FxHashSet<InstanceId> = changed.iter().copied().collect();
-        if !changed.is_empty() {
+        relaid.sort_unstable();
+        relaid.dedup();
+        if !relaid.is_empty() {
             profiling::scope!("Gui::layout trees");
-            (self.layout).redo(dom, &changed, (&mut self.fonts, &self.turning));
-            self.write_trees(dom, &changed);
-            self.redraw(dom, &changed);
+            (self.layout).redo(dom, &relaid, (&mut self.fonts, &self.turning));
+            self.write_trees(dom, &relaid);
+            self.redraw(dom, &relaid);
             // What moved draws again with its tree's new stack; what
             // changed in place (a label's text, an image arriving) is named.
             self.repaint(dom, &touched, false);
@@ -89,36 +203,32 @@ impl Gui {
         }
         // Those in a tree just laid out are already in place.
         let shifted: Vec<InstanceId> = (shifted.into_iter())
-            .filter(|&id| layout::top_of(dom, id).is_some_and(|top| !relaid.contains(&top)))
+            .filter(|&id| {
+                layout::top_of(dom, id).is_some_and(|top| relaid.binary_search(&top).is_err())
+            })
             .collect();
-        let placed: FxHashSet<InstanceId> = shifted.iter().copied().collect();
         if !shifted.is_empty() {
             profiling::scope!("Gui::layout objects");
             (self.layout).place_again(dom, &shifted, (&mut self.fonts, &self.turning));
             self.write_trees(dom, &shifted);
             self.repaint(dom, &shifted, true);
         }
-        // Text laid out above already has its new look.
-        let retexted: Vec<InstanceId> = (std::mem::take(&mut self.retexted).into_iter())
-            .filter(|&id| {
-                !placed.contains(&id)
-                    && layout::top_of(dom, id).is_some_and(|top| !relaid.contains(&top))
-            })
-            .collect();
-        if !retexted.is_empty() {
-            self.layout
-                .restyle_texts(dom, &retexted, (&mut self.fonts, &self.turning));
-            self.restyled.extend(retexted);
-        }
-        let restyled: Vec<InstanceId> = std::mem::take(&mut self.restyled).into_iter().collect();
-        self.repaint(dom, &restyled, false);
+        (relaid, shifted)
+    }
+
+    /// Lay out again the world GUIs sized by the camera or their part
+    /// whose canvas changed size: `tree`'s, or every one.
+    fn resize_world(&mut self, dom: &mut Dom, tree: Option<InstanceId>) {
+        let followers = || {
+            let hung = match tree {
+                Some(top) => self.layout.world.range(top..=top),
+                None => self.layout.world.range(..),
+            };
+            hung.map(|(_, hung)| hung).filter(|(h, _)| h.follows())
+        };
         // A server draws nothing, so its billboards keep the size they were
         // laid out at.
-        if dom.local_player().is_none() {
-            return;
-        }
-        let followers = || (self.layout.world.values()).filter(|(h, _)| h.follows());
-        if followers().next().is_none() {
+        if followers().next().is_none() || dom.local_player().is_none() {
             return;
         }
         let eye = world::Eye::of(dom);
@@ -146,18 +256,6 @@ impl Gui {
     ) {
         if self.overheads.update(dom, &mut blocked) {
             self.tag_changes += 1;
-        }
-    }
-
-    /// [`Gui::sync`], and lay out `id`'s tree too when it isn't on a screen
-    /// (unparented, or kept in storage).
-    pub fn sync_for(&mut self, dom: &mut Dom, id: InstanceId) {
-        self.sync(dom);
-        if !self.layout.contains(id)
-            && let Some(top) = layout::top_of(dom, id)
-        {
-            (self.layout).redo(dom, &[top], (&mut self.fonts, &self.turning));
-            self.write_trees(dom, &[top]);
         }
     }
 

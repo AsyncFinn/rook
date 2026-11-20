@@ -310,7 +310,9 @@ impl Gui {
                 self.in_world
                     .extend(found.filter(|&id| world::is_world_gui(dom, id)));
             }
-            if !self.stale {
+            // While the screen is stale, every tree lays out whole but
+            // those a read laid out since, whose changes are kept.
+            if !self.stale || !self.fresh.is_empty() {
                 let watch = self.watch.as_ref().expect("made above");
                 let touch = watch.touches(dom, change);
                 match (touch, change) {
@@ -321,7 +323,7 @@ impl Gui {
                     _ => rook_types::count!(GuiObjectsChanged, 1),
                 }
                 match (touch, change) {
-                    (Touch::All, _) => self.stale = true,
+                    (Touch::All, _) => self.screen_changed(),
                     (
                         Touch::Tree,
                         Change::Reparented {

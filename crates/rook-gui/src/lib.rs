@@ -63,11 +63,35 @@ struct Moved {
     subtree: Vec<InstanceId>,
 }
 
+/// What changed in one GUI tree since it was laid out, filed by
+/// [`Gui::sync`] or a script's read so either can lay out that tree alone.
+#[derive(Debug, Default)]
+struct Pending {
+    /// Objects whose tree lays out again (see [`Gui::changed`]).
+    changed: Vec<InstanceId>,
+    /// Objects placed again (see [`Gui::shifted`]).
+    shifted: Vec<InstanceId>,
+    /// The tree itself, joined by GUI that moved in: laid out again whole.
+    joined: Vec<InstanceId>,
+}
+
+impl Pending {
+    fn merge(mut self, other: Self) -> Self {
+        self.changed.extend(other.changed);
+        self.shifted.extend(other.shifted);
+        self.joined.extend(other.joined);
+        self
+    }
+}
+
 #[derive(Debug)]
 pub struct Gui {
     cursor: u64,
     /// Everything lays out again: the screen resized.
     stale: bool,
+    /// While `stale`, the trees a script's read laid out on their own
+    /// since: the frame's layout keeps them as they are.
+    fresh: FxHashSet<InstanceId>,
     /// GUI that moved in the tree since the last layout.
     moved: Vec<Moved>,
     /// Objects changed since the last layout; their trees lay out again.
@@ -82,6 +106,9 @@ pub struct Gui {
     /// Text objects whose glyphs' look alone changed: their text lays
     /// out again on its own, then they draw again.
     retexted: FxHashSet<InstanceId>,
+    /// The changes above, with the moves, filed by the tree they're in
+    /// (`None`: in no tree, as Hints and Messages) until it's laid out.
+    pending: FxHashMap<Option<InstanceId>, Pending>,
     layout: Layout,
     /// Counts layouts and looks, so input knows when what's under the
     /// cursor may have changed.
@@ -150,11 +177,13 @@ impl Default for Gui {
         Self {
             cursor: 0,
             stale: true,
+            fresh: FxHashSet::default(),
             moved: Vec::new(),
             changed: FxHashSet::default(),
             shifted: FxHashSet::default(),
             restyled: FxHashSet::default(),
             retexted: FxHashSet::default(),
+            pending: FxHashMap::default(),
             layout: Layout::default(),
             laid_out: 0,
             tag_changes: 0,
@@ -192,7 +221,13 @@ impl Gui {
     /// has no fonts and draws nothing.
     pub fn set_content(&mut self, resolver: Arc<rook_content::Resolver>) {
         self.fonts.set_resolver(resolver);
+        self.screen_changed();
+    }
+
+    /// Everything lays out again, on the screen as it is now.
+    fn screen_changed(&mut self) {
         self.stale = true;
+        self.fresh.clear();
     }
 
     /// How big `text` is in `font` at `size` pixels, wrapped to `frame`'s
@@ -258,6 +293,10 @@ impl Gui {
         self.shifted.remove(&id);
         self.restyled.remove(&id);
         self.retexted.remove(&id);
+        // What's filed under it is freed with it (the rest is filtered
+        // when laid out).
+        self.pending.remove(&Some(id));
+        self.fresh.remove(&id);
         self.in_world.remove(&id);
         self.messages.remove(&id);
         if self.focus == Some(id) {

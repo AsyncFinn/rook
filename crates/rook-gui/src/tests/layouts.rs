@@ -577,6 +577,69 @@ fn reads_lay_out_unparented_trees() {
     assert_eq!(vec2_of(&dom, c, "AbsolutePosition"), Vec2::ZERO);
 }
 
+/// A read lays out only its own tree, and nothing when nothing changed:
+/// another ScreenGui's change waits for the frame's layout, and reading
+/// an unparented tree again (even through a second UI layout, which
+/// arranges nothing) lays out nothing.
+#[test]
+fn reads_lay_out_only_their_own_tree() {
+    use rook_types::counters::{Counter, take_local};
+    let (mut dom, b) = boxed();
+    let player_gui = dom.parent(dom.parent(b).unwrap()).unwrap();
+    let other = child(&mut dom, "ScreenGui", player_gui, &[]);
+    let far = frame(&mut dom, other, udim2(0.0, 30, 0.0, 30));
+    let u = dom.create_by_name("Frame").unwrap();
+    set(&mut dom, u, "Size", udim2(0.0, 50, 0.0, 40));
+    child(&mut dom, "UIListLayout", u, &[]);
+    let idle = child(&mut dom, "UIListLayout", u, &[]);
+    let mut gui = laid_out(&mut dom);
+    gui.sync_for(&mut dom, u);
+    set(&mut dom, far, "Size", udim2(0.0, 60, 0.0, 60));
+    set(&mut dom, b, "Size", udim2(0.0, 10, 0.0, 10));
+    take_local();
+    gui.sync_for(&mut dom, b);
+    assert_eq!(take_local()[Counter::GuiNodesLaidOut], 1);
+    assert_eq!(vec2_of(&dom, b, "AbsoluteSize"), Vec2::new(10.0, 10.0));
+    assert_eq!(vec2_of(&dom, far, "AbsoluteSize"), Vec2::new(30.0, 30.0));
+    gui.sync_for(&mut dom, b);
+    gui.sync_for(&mut dom, idle);
+    assert_eq!(take_local()[Counter::GuiNodesLaidOut], 0);
+    gui.sync(&mut dom);
+    assert_eq!(vec2_of(&dom, far, "AbsoluteSize"), Vec2::new(60.0, 60.0));
+}
+
+/// A read after the screen changed size lays out its own tree, which the
+/// frame's layout keeps, with what changed in it since.
+#[test]
+fn reads_on_a_resized_screen_lay_out_their_own_tree() {
+    use rook_types::counters::{Counter, take_local};
+    let (mut dom, player_gui) = client();
+    let halves = |dom: &mut Dom| {
+        let screen = child(dom, "ScreenGui", player_gui, &[]);
+        frame(dom, screen, udim2(0.5, 0, 0.5, 0))
+    };
+    let (near_one, far) = (halves(&mut dom), halves(&mut dom));
+    let mut gui = laid_out(&mut dom);
+    let camera = dom.find_first_child_of_class(dom.find_service("Workspace").unwrap(), "Camera");
+    set(&mut dom, camera.unwrap(), "ViewportSize", v2(1000.0, 658.0));
+    take_local();
+    gui.sync_for(&mut dom, near_one);
+    assert_eq!(take_local()[Counter::GuiNodesLaidOut], 2);
+    assert_eq!(
+        vec2_of(&dom, near_one, "AbsoluteSize"),
+        Vec2::new(500.0, 300.0)
+    );
+    assert_eq!(vec2_of(&dom, far, "AbsoluteSize"), Vec2::new(780.5, 367.5));
+    set(&mut dom, near_one, "Size", udim2(0.25, 0, 0.5, 0));
+    gui.sync(&mut dom);
+    assert_eq!(take_local()[Counter::GuiNodesLaidOut], 3);
+    assert_eq!(
+        vec2_of(&dom, near_one, "AbsoluteSize"),
+        Vec2::new(250.0, 300.0)
+    );
+    assert_eq!(vec2_of(&dom, far, "AbsoluteSize"), Vec2::new(500.0, 300.0));
+}
+
 #[test]
 fn only_gui_changes_lay_out_again() {
     let (mut dom, b) = boxed();

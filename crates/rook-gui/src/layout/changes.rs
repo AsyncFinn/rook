@@ -6,16 +6,18 @@ use super::*;
 impl Layout {
     /// Lay out the GUI scripts see: every player's PlayerGui, StarterGui,
     /// CoreGui (what Roblox's CoreScripts draw) and the world GUIs in
-    /// `world`. `previous` is the last layout, where
-    /// hidden children of a UI layout stay; `turning` says where each
-    /// turning UIPageLayout's view is.
+    /// `world`, but the trees from `kept`, which are taken from `previous`
+    /// as they are. `previous` is the last layout, where hidden children
+    /// of a UI layout stay; `turning` says where each turning
+    /// UIPageLayout's view is. Returns the trees kept.
     pub(crate) fn screens(
         dom: &Dom,
-        (previous, turning): (&Layout, &Turning),
+        (previous, turning): (&mut Layout, &Turning),
         fonts: &mut Fonts,
         world: &[InstanceId],
-    ) -> Self {
-        let mut pass = Pass::new(dom, (previous, turning), fonts, Layout::default());
+        kept: &FxHashSet<InstanceId>,
+    ) -> (Self, Vec<InstanceId>) {
+        let mut roots = Vec::new();
         let players = dom.find_service("Players");
         let holders = players
             .into_iter()
@@ -24,16 +26,53 @@ impl Layout {
             .chain(dom.find_service("StarterGui"))
             .chain(dom.find_service("CoreGui"));
         for holder in holders {
-            for root in through_folders(dom, holder, |id| dom.is_a(id, "GuiBase2d")) {
-                if world.binary_search(&root).is_err() {
-                    pass.root(root);
-                }
-            }
+            let found = through_folders(dom, holder, |id| dom.is_a(id, "GuiBase2d"));
+            roots.extend(
+                found
+                    .into_iter()
+                    .filter(|r| world.binary_search(r).is_err()),
+            );
         }
-        for &root in world {
+        roots.extend(world);
+        let (kept, roots): (Vec<InstanceId>, Vec<InstanceId>) =
+            roots.into_iter().partition(|r| kept.contains(r));
+        let mut pass = Pass::new(dom, (&*previous, turning), fonts, Layout::default());
+        for root in roots {
             pass.root(root);
         }
-        pass.out
+        let mut out = pass.out;
+        for &top in &kept {
+            out.take_tree(dom, previous, top);
+        }
+        (out, kept)
+    }
+
+    /// Move the tree from `top` as laid out in `from` into this layout,
+    /// but the world GUIs in it, which are trees of their own.
+    fn take_tree(&mut self, dom: &Dom, from: &mut Layout, top: InstanceId) {
+        let mut stack = vec![top];
+        while let Some(id) = stack.pop() {
+            if let Some(v) = from.placed.remove(&id) {
+                self.placed.insert(id, v);
+            }
+            if let Some(v) = from.arranged.remove(&id) {
+                self.arranged.insert(id, v);
+            }
+            if let Some(v) = from.pages.remove(&id) {
+                self.pages.insert(id, v);
+            }
+            if let Some(v) = from.texts.remove(&id) {
+                self.texts.insert(id, v);
+            }
+            if let Some(v) = from.scrolls.remove(&id) {
+                self.scrolls.insert(id, v);
+            }
+            let held = dom.children(id).iter().copied();
+            stack.extend(held.filter(|&c| !world::is_world_gui(dom, c)));
+        }
+        if let Some(v) = from.world.remove(&top) {
+            self.world.insert(top, v);
+        }
     }
 
     /// Forget where `ids` were laid out (they left their tree, or are
@@ -46,10 +85,6 @@ impl Layout {
             self.scrolls.remove(id);
             self.world.remove(id);
         }
-    }
-
-    pub(crate) fn contains(&self, id: InstanceId) -> bool {
-        self.placed.contains_key(&id) || self.arranged.contains_key(&id)
     }
 
     /// Lay out the trees from `tops` again (a world GUI the camera
