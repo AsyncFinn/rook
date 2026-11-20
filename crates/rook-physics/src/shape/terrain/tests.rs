@@ -270,27 +270,46 @@ fn smooth_grid_changes_rebuild_only_changed_chunks() {
     assert!(physics.raycast(&mut dom, slab, down, &all).is_some());
 }
 
-/// Rapier sums the mass of every collider on a body each time one is
-/// added or removed, and a mesh with a density is weighed triangle by
-/// triangle: terrain colliders weighing anything made each chunk built
-/// near a moving part cost as much as weighing every chunk built before.
+/// Terrain built for one moving part leaves the parts resting elsewhere
+/// on terrain asleep.
 #[test]
-fn terrain_colliders_are_weightless() {
+fn building_terrain_leaves_resting_parts_asleep() {
     let (mut dom, _) = world();
-    part(
+    let resting = part(
         &mut dom,
         "Part",
-        Vec3::new(102.0, 52.0, 2.0),
+        Vec3::new(202.0, 46.0, 2.0),
         Vec3::new(2.0, 1.0, 2.0),
         false,
     );
+    // Reaches the first chunk's terrain a little after two seconds.
+    part(
+        &mut dom,
+        "Part",
+        Vec3::new(2.0, 600.0, 2.0),
+        Vec3::ONE,
+        false,
+    );
     let mut physics = Physics::new();
-    physics.sync(&mut dom);
-    physics.step(1.0 / 60.0);
-    assert!(!physics.terrain.pieces.is_empty());
-    for collider in physics.terrain.pieces.keys() {
-        assert_eq!(physics.world.colliders[*collider].mass(), 0.0);
+    let asleep = |physics: &Physics| {
+        let body = physics.body_of(resting).unwrap();
+        physics.world.bodies[body].is_sleeping()
+    };
+    let frame = |physics: &mut Physics, dom: &mut Dom| {
+        physics.sync(dom);
+        physics.step(1.0 / 60.0);
+        physics.write_back(dom);
+    };
+    for _ in 0..120 {
+        frame(&mut physics, &mut dom);
     }
+    assert!(asleep(&physics), "settled");
+    let built = physics.terrain.pieces.len();
+    for _ in 0..60 {
+        frame(&mut physics, &mut dom);
+        assert!(asleep(&physics), "woken");
+    }
+    assert!(physics.terrain.pieces.len() > built, "nothing built");
 }
 
 /// The first sync builds the terrain under the place's loose parts, so

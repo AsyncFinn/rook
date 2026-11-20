@@ -4,6 +4,11 @@
 //! comes near the chunk ([`near`]); water's is a sensor. Scripts' edits
 //! rebuild only the chunks they touch ([`edit`]). Measurements are in
 //! `docs/behavior/terrain/collision.md`.
+//!
+//! The colliders are static geometry with no body, as anchored parts are
+//! ([`crate::Physics`]'s `statics`): colliders on one body are placed
+//! again together whenever one is added or removed, which woke every
+//! assembly resting on terrain each time a chunk was built.
 
 use rapier3d::parry::query::RayCullingMode;
 use rapier3d::parry::shape::TriMesh;
@@ -25,7 +30,6 @@ use crate::contacts::materials;
 pub(crate) struct Terrain {
     /// Workspace's Terrain, which the colliders stand for.
     pub(crate) instance: Option<InstanceId>,
-    body: Option<RigidBodyHandle>,
     pieces: FxHashMap<ColliderHandle, TerrainMaterial>,
     /// Each built chunk's colliders, so an edit can take them down.
     chunk_pieces: FxHashMap<glam::IVec3, Vec<ColliderHandle>>,
@@ -131,12 +135,10 @@ impl Physics {
         if self.update_terrain(dom) {
             return;
         }
-        if let Some(body) = self.terrain.body.take() {
-            self.world.remove_body(body);
-            for (collider, _) in self.terrain.pieces.drain() {
-                if let Some(part) = self.colliders.remove(&collider) {
-                    self.touch.retire(collider, part);
-                }
+        for (collider, _) in self.terrain.pieces.drain() {
+            self.world.remove_collider(collider);
+            if let Some(part) = self.colliders.remove(&collider) {
+                self.touch.retire(collider, part);
             }
         }
         self.terrain.chunk_pieces.clear();
@@ -149,8 +151,6 @@ impl Physics {
             return;
         };
         self.terrain.instance = Some(terrain);
-        // Even an empty Terrain gets its body: scripts may fill it.
-        self.terrain.body = Some(self.world.insert_body(RigidBodyBuilder::fixed()));
         self.terrain.groups = self.interaction_groups(dom, terrain);
         // Shares the DataModel's voxels until an edit writes to them.
         let Some(voxels) = voxels else {
@@ -170,7 +170,6 @@ impl Physics {
             return false;
         };
         if self.terrain.instance != Some(terrain)
-            || self.terrain.body.is_none()
             || self.interaction_groups(dom, terrain) != self.terrain.groups
         {
             return false;
@@ -197,7 +196,7 @@ impl Physics {
 
     /// Build the colliders of these chunks (unbuilt ones, each once).
     fn build_chunks(&mut self, chunks: &[glam::IVec3]) {
-        let (Some(terrain), Some(body)) = (self.terrain.instance, self.terrain.body) else {
+        let Some(terrain) = self.terrain.instance else {
             return;
         };
         profiling::scope!(
@@ -220,11 +219,6 @@ impl Physics {
             let water = piece.material == TerrainMaterial::Water;
             let surface = materials::of_material(piece.material.material() as u32);
             let collider = ColliderBuilder::new(SharedShape::new(piece.mesh))
-                // Weightless: Rapier sums the mass of every collider on
-                // the terrain's fixed body each time one is added or
-                // removed, and a mesh with a density is weighed triangle
-                // by triangle, so each chunk built would weigh them all.
-                .density(0.0)
                 .position(Pose::from_translation(piece.origin))
                 .friction(surface.friction)
                 .restitution(surface.elasticity)
@@ -233,7 +227,7 @@ impl Physics {
                 .solver_groups(solver)
                 .collision_groups(collision)
                 .sensor(water);
-            let handle = self.world.insert_collider(collider, Some(body));
+            let handle = self.world.insert_collider(collider, None);
             self.colliders.insert(handle, terrain);
             self.terrain.pieces.insert(handle, piece.material);
             self.terrain
