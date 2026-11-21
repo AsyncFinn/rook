@@ -92,6 +92,77 @@ fn scripts_run_the_bytecode_kept_for_their_source() {
     );
 }
 
+/// Scripts that came compiled by a newer Luau than mlua knows about run,
+/// as Roblox's own scripts are, and bytecode too new for the VM says which
+/// version it is.
+#[test]
+fn compiled_scripts_of_every_version_the_vm_runs_load() {
+    let rt = Runtime::new(Dom::new(), Clock::Fixed { step: 1.0 / 60.0 }).unwrap();
+    let mut scripts = Vec::new();
+    for version in [14, 15] {
+        let code = crate::runtime::bytecode::compiler()
+            .compile(format!("print('version {version} runs')"))
+            .unwrap();
+        let mut w = rt.world_mut();
+        let script = w.dom.create_by_name("Script").unwrap();
+        w.dom.set_name(script, format!("V{version}")).unwrap();
+        let code = with_version(&code, version).into();
+        w.bytecode.insert(script, Compiled { code, core: true });
+        scripts.push(script);
+    }
+    for script in scripts {
+        rt.run_script(script);
+    }
+    let out: Vec<String> = rt.take_log().into_iter().map(|e| e.message).collect();
+    assert_eq!(out[0], "version 14 runs", "{out:?}");
+    assert!(
+        out[1].contains("bytecode version mismatch (expected [3..14], got 15)"),
+        "{out:?}"
+    );
+}
+
+/// `code`, one function compiled at Luau's default version 9, rewritten
+/// as `version` (11 adds a feedback vector to each function, 12 its size
+/// before it).
+fn with_version(code: &[u8], version: u8) -> Vec<u8> {
+    fn varint(code: &[u8], at: &mut usize) -> usize {
+        let mut n = 0;
+        let mut shift = 0;
+        loop {
+            let b = code[*at];
+            *at += 1;
+            n |= usize::from(b & 0x7f) << shift;
+            shift += 7;
+            if b & 0x80 == 0 {
+                return n;
+            }
+        }
+    }
+    assert_eq!((code[0], code[1]), (9, 3), "version 9, types version 3");
+    let mut at = 2;
+    for _ in 0..varint(code, &mut at) {
+        at += varint(code, &mut at);
+    }
+    // The userdata type names, to a 0.
+    while code[at] != 0 {
+        at += 1;
+        varint(code, &mut at);
+    }
+    at += 1;
+    assert_eq!(varint(code, &mut at), 1, "one function");
+    // The function runs to the main function's index, 0, at the end.
+    let mut function = code[at..code.len() - 1].to_vec();
+    assert_eq!(function[4] & 1 << 3, 0, "the function isn't inlinable");
+    function.push(0);
+    assert!(function.len() < 0x80, "its size fits a byte");
+    let mut out = vec![version, 3];
+    out.extend_from_slice(&code[2..at]);
+    out.push(function.len() as u8);
+    out.extend(function);
+    out.push(0);
+    out
+}
+
 #[test]
 fn runaway_scripts_time_out() {
     let rt = Runtime::new(Dom::new(), Clock::Fixed { step: 1.0 / 60.0 }).unwrap();

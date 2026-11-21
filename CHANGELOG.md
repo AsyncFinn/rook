@@ -7,6 +7,7 @@ Every release, newest first. How versions are numbered is in
 
 - A script reading a GUI object's `AbsoluteSize`, `AbsolutePosition`, `TextBounds` or another laid-out property no longer stalls the game. The read laid out every GUI that had changed, and could lay out a GUI kept in storage again on every read; now it lays out only what changed in the object's own GUI, and nothing when nothing did.
 - Parts resting on terrain fall asleep and stay asleep while things move elsewhere on the map, as in Roblox. Rook woke every part resting on terrain whenever a moving part reached terrain it hadn't touched yet, so on large terrain maps they never slept and the server kept simulating them.
+- Roblox's CoreScripts and PlayerModule run again with Studio's latest packages. Rook refused to load scripts compiled by the newer Luau Roblox now uses, so the in-game GUI and the character's controls and camera scripts didn't start. See [CoreScripts](docs/behavior/gui/core-scripts.md).
 
 ## [0.5.1] - 2026-11-18
 

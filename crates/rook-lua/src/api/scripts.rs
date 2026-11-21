@@ -39,17 +39,17 @@ fn compile(lua: &Lua, id: InstanceId, env: Table) -> mlua::Result<Function> {
         (None, Some(source)) => bytecode::of(source),
         (None, None) => None,
     };
-    let chunk = match &code {
-        Some(code) => lua.load(&code[..]).set_mode(mlua::chunk::ChunkMode::Binary),
+    let name = format!("={name}");
+    match &code {
+        Some(code) => bytecode::load(lua, code, &name, env),
         // It doesn't compile: the text reports why.
         None => lua
             .load(source.unwrap_or_default())
-            .set_compiler(bytecode::compiler()),
-    };
-    chunk
-        .set_name(format!("={name}"))
-        .set_environment(env)
-        .into_function()
+            .set_compiler(bytecode::compiler())
+            .set_name(name)
+            .set_environment(env)
+            .into_function(),
+    }
 }
 
 /// The environments of scripts that came compiled: Roblox's own, which

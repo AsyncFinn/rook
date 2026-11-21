@@ -7,8 +7,41 @@
 //! same way (V8's code cache, keyed by the source).
 
 use mlua::chunk::Compiler;
+use mlua::{Function, Lua, Table, Value, ffi};
 use rustc_hash::FxHashMap;
+use std::ffi::CString;
 use std::sync::{Arc, LazyLock, Mutex};
+
+/// Load bytecode as a function named `name` (a chunk name, `=` and the
+/// script's full name) that runs in `env`.
+///
+/// It goes to Luau's loader itself, not through mlua's `load`, which
+/// guesses from the version byte whether bytes are bytecode and takes a
+/// version newer than the ones it knows for source text. Roblox compiles
+/// its scripts with a newer Luau than mlua knows about, so they failed to
+/// load though the VM runs them. Luau's loader checks the version and names
+/// it when the VM can't run it.
+#[allow(unsafe_code)]
+pub(crate) fn load(lua: &Lua, code: &[u8], name: &str, env: Table) -> mlua::Result<Function> {
+    let name = CString::new(name).map_err(mlua::Error::external)?;
+    let mut status = 0;
+    // SAFETY: `env`, the one argument, is at stack index 1. `luau_load`
+    // reads `code` within its length and pushes the function or an error
+    // message, which is then the only value left on the stack.
+    let loaded: Value = unsafe {
+        lua.exec_raw(env, |state| {
+            status = ffi::luau_load(state, name.as_ptr(), code.as_ptr().cast(), code.len(), 1);
+            ffi::lua_remove(state, 1);
+        })
+    }?;
+    match loaded {
+        Value::Function(f) if status == 0 => Ok(f),
+        message => Err(mlua::Error::SyntaxError {
+            message: message.to_string()?,
+            incomplete_input: false,
+        }),
+    }
+}
 
 /// How game code is compiled: optimization level 2, the default in live
 /// games (level 1 is Studio testing's; creator-docs Luau comments). A

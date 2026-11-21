@@ -8,8 +8,8 @@
 //! allocator because then mlua protects every string, table and userdata
 //! the engine creates, which made each `inst.Name` read 300 ns slower.
 //!
-//! One of Rook's two unsafe spots (the other is in rook-content's loader):
-//! it only installs the function, reads the heap size and raises errors.
+//! Its unsafe code only installs the function, reads the heap size and
+//! raises errors.
 
 #![allow(unsafe_code)]
 
