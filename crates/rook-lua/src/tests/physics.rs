@@ -223,3 +223,35 @@ fn overlap_include_and_exclude_lists() {
         ],
     );
 }
+
+/// A script that poses a rig's joints and moves its root in one go (as a
+/// viewmodel each frame) keeps the move when physics next syncs: the joints
+/// are placed around the root's new CFrame, not the one physics held before.
+#[test]
+fn joint_change_and_move_in_one_batch_keep_the_move() {
+    expect(
+        r#"
+        local m = Instance.new("Model")
+        local root = Instance.new("Part")
+        root.Anchored = true
+        root.CFrame = CFrame.new(0, 10, 0)
+        root.Parent = m
+        local arm = Instance.new("Part")
+        arm.Parent = m
+        local motor = Instance.new("Motor6D")
+        motor.Part0, motor.Part1 = root, arm
+        motor.C0 = CFrame.new(1, 0, 0)
+        motor.Parent = root
+        m.Parent = workspace
+        task.wait()
+        for i = 1, 3 do
+            motor.C0 = CFrame.new(1, i, 0)
+            root.CFrame = CFrame.new(100 * i, 10, 0)
+            workspace:Raycast(Vector3.new(0, 1000, 0), Vector3.new(0, -1, 0))
+            print(root.Position.X, arm.Position.X, arm.Position.Y)
+        end
+        "#,
+        3,
+        &["100 101 11", "200 201 12", "300 301 13"],
+    );
+}
