@@ -24,6 +24,13 @@ pub struct Filter {
     pub skip_invisible_ghosts: bool,
     /// Skip parts more transparent than this.
     pub max_transparency: Option<f32>,
+    /// `ExcludeInstances`: parts in or under these are skipped, whatever the
+    /// other lists say (measured in Studio 0.748: exclusion wins).
+    pub exclude: FxHashSet<InstanceId>,
+    /// `IncludeInstances`: when set, only parts in or under these are
+    /// considered, on top of the legacy list (the lists intersect; an empty
+    /// set considers nothing, `None` everything).
+    pub only: Option<FxHashSet<InstanceId>>,
 }
 
 impl Filter {
@@ -38,6 +45,7 @@ impl Filter {
             ignore_water: false,
             skip_invisible_ghosts: false,
             max_transparency: None,
+            ..Default::default()
         }
     }
 
@@ -51,6 +59,7 @@ impl Filter {
             ignore_water: false,
             skip_invisible_ghosts: false,
             max_transparency: None,
+            ..Default::default()
         }
     }
 }
@@ -98,6 +107,9 @@ impl<'a> Accepting<'a> {
 
     pub(super) fn accepts(&self, part: InstanceId) -> bool {
         let (filter, dom, props) = (self.filter, self.dom, self.props);
+        if filter.only.as_ref().is_some_and(FxHashSet::is_empty) {
+            return false;
+        }
         let off = |property| dom.property(part, property) == Some(Value::Bool(false));
         let collides = !off(props.can_collide);
         if !collides && (filter.respect_can_collide || off(props.can_query)) {
@@ -117,9 +129,20 @@ impl<'a> Accepting<'a> {
                 return false;
             }
         }
-        let listed = !filter.instances.is_empty()
-            && (std::iter::once(part).chain(dom.ancestors(part)))
-                .any(|i| filter.instances.contains(&i));
-        listed == filter.include
+        // One walk up from the part answers all three lists.
+        let (mut listed, mut excluded) = (false, false);
+        let mut included = filter.only.is_none();
+        let lists = !filter.instances.is_empty() || !filter.exclude.is_empty() || !included;
+        if lists {
+            for i in std::iter::once(part).chain(dom.ancestors(part)) {
+                listed |= filter.instances.contains(&i);
+                excluded |= filter.exclude.contains(&i);
+                included |= filter.only.as_ref().is_some_and(|only| only.contains(&i));
+                if excluded {
+                    return false;
+                }
+            }
+        }
+        listed == filter.include && included
     }
 }
