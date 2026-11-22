@@ -37,6 +37,10 @@ AudioDistortion at `Level` 1 (about 0.967 rms).
   true, `AutoPlay` false. `Asset` turns `\` into `/`. `IsPlaying` can't
   be set ("lacking capability RobloxEngine"; Rook's `RobloxSecurity`
   capability now has Studio's name).
+- `AssetId` is `Asset` by its older name (creator-docs: deprecated for
+  `Asset`): each reads and writes the other, a number written to it reads
+  back as a string, and a change to `Asset` fires `AssetId`'s change
+  signal (measured in Studio 0.748).
 - It loads only in the DataModel, through the same cache as Sounds:
   `IsReady`, then `TimeLength` changes. With `AutoLoad` false it loads
   on `Play`. A file that fails leaves `IsReady` false, and the player
