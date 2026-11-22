@@ -23,9 +23,9 @@ pub struct Runner<K> {
     pub(super) graph: Graph<K>,
     /// Node indices in the order they run: every node after what feeds it.
     pub(super) order: Vec<usize>,
-    /// Each node's inputs: the feeding node's index, and whether it goes to
-    /// the sidechain.
-    pub(super) inputs: Vec<Vec<(usize, bool)>>,
+    /// Each node's inputs: the feeding wire, with the nodes' indices in
+    /// place of their keys.
+    pub(super) inputs: Vec<Vec<Wire<usize>>>,
     pub(super) states: FxHashMap<K, State<K>>,
     pub(super) scratch: Vec<Frame>,
     pub(super) key: Vec<Frame>,
@@ -118,11 +118,18 @@ impl<K: Hash + Eq + Copy> Runner<K> {
         self.inputs = vec![Vec::new(); graph.nodes.len()];
         let mut edges: Vec<(usize, usize)> = Vec::new();
         for w in &graph.wires {
-            if let (Some(&from), Some(&to)) = (index.get(&w.from), index.get(&w.to))
-                && !self.inputs[to].contains(&(from, w.sidechain))
-            {
-                self.inputs[to].push((from, w.sidechain));
-                edges.push((from, to));
+            if let (Some(&from), Some(&to)) = (index.get(&w.from), index.get(&w.to)) {
+                let input = Wire {
+                    from,
+                    to,
+                    sidechain: w.sidechain,
+                    from_channel: w.from_channel,
+                    to_channel: w.to_channel,
+                };
+                if !self.inputs[to].contains(&input) {
+                    self.inputs[to].push(input);
+                    edges.push((from, to));
+                }
             }
         }
         for (to, node) in graph.nodes.iter().enumerate() {
@@ -156,20 +163,17 @@ impl<K: Hash + Eq + Copy> Runner<K> {
             let mut keyed = false;
             self.key.clear();
             self.key.resize(frames, [0.0; 2]);
-            for &(from, sidechain) in &self.inputs[i] {
-                let Some(src) = self.states.get(&self.graph.nodes[from].key) else {
+            for input in &self.inputs[i] {
+                let Some(src) = self.states.get(&self.graph.nodes[input.from].key) else {
                     continue;
                 };
-                let into = if sidechain {
+                let into = if input.sidechain {
                     keyed = true;
                     &mut self.key
                 } else {
                     &mut buffer
                 };
-                for (a, b) in src.buffer.iter().zip(into.iter_mut()) {
-                    b[0] += a[0];
-                    b[1] += a[1];
-                }
+                route(&src.buffer, into, input.from_channel, input.to_channel);
             }
             if let NodeKind::Listener(heard) = &node.kind {
                 for (emitter, target) in heard {
@@ -220,6 +224,35 @@ impl<K: Hash + Eq + Copy> Runner<K> {
 
     pub fn meter(&self, key: K) -> Option<&Meter> {
         self.states.get(&key)?.meter.as_ref()
+    }
+}
+
+/// Add `src` into `dst` through a wire's channel pins: a splitter's
+/// channel pin passes that channel alone (as mono), a mixer's places what
+/// reaches it on that channel alone (a whole stream mixed to mono first);
+/// whole-stream pins on both ends pass both sides as they are.
+pub(super) fn route(src: &[Frame], dst: &mut [Frame], from: Option<Channel>, to: Option<Channel>) {
+    let from = from.map(Channel::side);
+    let to = to.map(Channel::side);
+    for (a, b) in src.iter().zip(dst.iter_mut()) {
+        if from.is_none() && to.is_none() {
+            b[0] += a[0];
+            b[1] += a[1];
+            continue;
+        }
+        let mono = match from {
+            Some(Side::Left) => a[0],
+            Some(Side::Right) => a[1],
+            Some(Side::Both) | None => (a[0] + a[1]) * 0.5,
+        };
+        match to {
+            Some(Side::Left) => b[0] += mono,
+            Some(Side::Right) => b[1] += mono,
+            Some(Side::Both) | None => {
+                b[0] += mono;
+                b[1] += mono;
+            }
+        }
     }
 }
 

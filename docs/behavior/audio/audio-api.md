@@ -118,6 +118,17 @@ the rms at neutral settings; a listener's output is 8 channels too.
 Rook's streams are all stereo, so it reads those higher. The gains were
 compared through the layout (the table below divides it out).
 
+*Channel pins.* AudioChannelSplitter's output pins and
+AudioChannelMixer's input pins name channels; the mixer's, measured in
+Studio 0.748 with `GetInputPins`, are BackLeft, BackRight, Center, Input,
+Left, Right, Sub, SurroundLeft, SurroundRight, TopBackLeft, TopBackRight,
+TopLeft and TopRight, and its one output is Output. A splitter's channel
+pin passes that channel alone and a mixer's places what reaches it on
+that channel alone (creator-docs AudioChannelSplitter, AudioChannelMixer).
+Approximation, on Rook's stereo streams: each pin stands for the side
+it's on, Center and Sub for both sides; a channel into a whole-stream
+pin is heard on both.
+
 *Effects.* On the same file at the same time, AudioEqualizer,
 AudioDistortion, AudioPitchShifter, AudioReverb and AudioChorus gave
 the same level as their step 4 SoundEffect within 1% (Confirmed), so
@@ -168,10 +179,8 @@ client.
 
 *Not done:*
 
-- AudioFilter, AudioFlanger, AudioTremolo, AudioLimiter, AudioGate and
-  AudioChannelSplitter pass sound through (the splitter on every output
-  pin). AudioChannelMixer and the other audio classes aren't wired at
-  all.
+- AudioFilter, AudioFlanger, AudioTremolo, AudioLimiter and AudioGate
+  pass sound through. The other audio classes aren't wired at all.
 - AudioPlayer `PlaybackRegion` and `LoopRegion` keep their values but
   don't change playback.
 - The near-field spread, 7.1 layouts and Studio's curve encoding,

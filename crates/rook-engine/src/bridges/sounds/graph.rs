@@ -74,8 +74,8 @@ pub(super) fn effect(dom: &Dom, id: InstanceId) -> Option<Effect> {
             release: f("Release", 0.1),
             makeup: f("MakeupGain", 0.0),
         },
-        // TODO: play AudioFilter, AudioFlanger, AudioTremolo, AudioLimiter,
-        // AudioGate and AudioChannelSplitter.
+        // TODO: play AudioFilter, AudioFlanger, AudioTremolo, AudioLimiter
+        // and AudioGate.
         _ => return None,
     })
 }

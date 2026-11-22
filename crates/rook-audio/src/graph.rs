@@ -60,12 +60,84 @@ pub struct Node<K> {
     pub kind: NodeKind<K>,
 }
 
+/// A channel pin of AudioChannelSplitter or AudioChannelMixer. Each pin
+/// is its own, so two wires between the same nodes on different pins both
+/// carry sound.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Channel {
+    Left,
+    Right,
+    Center,
+    Sub,
+    SurroundLeft,
+    SurroundRight,
+    BackLeft,
+    BackRight,
+    TopLeft,
+    TopRight,
+    TopBackLeft,
+    TopBackRight,
+}
+
+/// The side of a stereo stream a [`Channel`] is on.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Side {
+    Left,
+    Right,
+    Both,
+}
+
+impl Channel {
+    /// The channel a pin name stands for; `None` for a whole-stream pin
+    /// (Input, Output).
+    pub fn of_pin(pin: &str) -> Option<Self> {
+        Some(match pin {
+            "Left" => Self::Left,
+            "Right" => Self::Right,
+            "Center" => Self::Center,
+            "Sub" => Self::Sub,
+            "SurroundLeft" => Self::SurroundLeft,
+            "SurroundRight" => Self::SurroundRight,
+            "BackLeft" => Self::BackLeft,
+            "BackRight" => Self::BackRight,
+            "TopLeft" => Self::TopLeft,
+            "TopRight" => Self::TopRight,
+            "TopBackLeft" => Self::TopBackLeft,
+            "TopBackRight" => Self::TopBackRight,
+            _ => return None,
+        })
+    }
+
+    /// Approximation: Studio's streams keep up to 7.1.4 channels; Rook's
+    /// are stereo, so each channel is the side it's on, and Center and Sub
+    /// are heard on both.
+    pub fn side(self) -> Side {
+        match self {
+            Self::Left
+            | Self::SurroundLeft
+            | Self::BackLeft
+            | Self::TopLeft
+            | Self::TopBackLeft => Side::Left,
+            Self::Right
+            | Self::SurroundRight
+            | Self::BackRight
+            | Self::TopRight
+            | Self::TopBackRight => Side::Right,
+            Self::Center | Self::Sub => Side::Both,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Wire<K> {
     pub from: K,
     pub to: K,
     /// Into an AudioCompressor's **Sidechain** pin rather than its input.
     pub sidechain: bool,
+    /// Out of a splitter's channel pin: only that channel, as mono.
+    pub from_channel: Option<Channel>,
+    /// Into a mixer's channel pin: placed on that channel only.
+    pub to_channel: Option<Channel>,
 }
 
 #[derive(Debug, Clone)]

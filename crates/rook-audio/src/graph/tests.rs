@@ -1,4 +1,4 @@
-use super::runner::order;
+use super::runner::{order, route};
 use super::*;
 
 fn audio(samples: Vec<i16>) -> Arc<Audio> {
@@ -14,6 +14,8 @@ fn wire(from: u32, to: u32) -> Wire<u32> {
         from,
         to,
         sidechain: false,
+        from_channel: None,
+        to_channel: None,
     }
 }
 
@@ -139,6 +141,8 @@ fn sidechain_keys_the_compressor() {
                 from: 2,
                 to: 3,
                 sidechain: true,
+                from_channel: None,
+                to_channel: None,
             });
         }
         r.sync(&Graph {
@@ -163,4 +167,69 @@ fn order_puts_sources_first() {
     assert_eq!(order(3, &[(2, 1), (1, 0)]), [2, 1, 0]);
     // A loop (a listener hearing an emitter it feeds) goes last.
     assert_eq!(order(3, &[(1, 2), (2, 1)]), [0, 1, 2]);
+}
+
+/// A splitter's Left pin wired to a mixer's Right pin moves the left
+/// channel across; whole-stream pins pass both sides as they are.
+#[test]
+fn channel_pins_pick_and_place() {
+    let src = [[0.5, -0.25]];
+    let mut dst = [[0.0, 0.0]];
+    route(&src, &mut dst, Some(Channel::Left), Some(Channel::Right));
+    assert_eq!(dst, [[0.0, 0.5]]);
+    let mut dst = [[0.0, 0.0]];
+    route(&src, &mut dst, None, None);
+    assert_eq!(dst, [[0.5, -0.25]]);
+    let mut dst = [[0.0, 0.0]];
+    route(&src, &mut dst, Some(Channel::Right), None);
+    assert_eq!(dst, [[-0.25, -0.25]]);
+    let mut dst = [[0.0, 0.0]];
+    route(&src, &mut dst, None, Some(Channel::Left));
+    assert_eq!(dst, [[0.125, 0.0]]);
+    // A whole stream into Center is mixed to mono on both sides.
+    let mut dst = [[0.0, 0.0]];
+    route(&[[1.0, 0.0]], &mut dst, None, Some(Channel::Center));
+    assert_eq!(dst, [[0.5, 0.5]]);
+    // SurroundLeft is the left side.
+    let mut dst = [[0.0, 0.0]];
+    route(
+        &src,
+        &mut dst,
+        Some(Channel::SurroundLeft),
+        Some(Channel::Right),
+    );
+    assert_eq!(dst, [[0.0, 0.5]]);
+}
+
+/// Two wires between the same nodes on different pins of one side both
+/// carry sound: neither is taken for a copy of the other, as a doubled
+/// wire is.
+#[test]
+fn wires_on_different_pins_both_carry() {
+    let mut r = Runner::new(100);
+    r.sync(&Graph {
+        topology: 0,
+        nodes: vec![
+            node(1, NodeKind::Player(Some(source(0.25)))),
+            node(2, NodeKind::Effect(None)),
+            node(3, NodeKind::Output),
+        ],
+        wires: vec![
+            Wire {
+                to_channel: Some(Channel::Left),
+                ..wire(1, 2)
+            },
+            Wire {
+                to_channel: Some(Channel::SurroundLeft),
+                ..wire(1, 2)
+            },
+            wire(2, 3),
+        ],
+    });
+    let out = render(&mut r, 10);
+    assert!(
+        out.iter()
+            .all(|f| (f[0] - 0.25).abs() < 1e-6 && f[1] == 0.0),
+        "{out:?}"
+    );
 }

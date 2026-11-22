@@ -82,3 +82,55 @@ fn client_graph_listeners_and_analyzers() {
     assert!(graph.has_output());
     assert!(graph.wires.iter().any(|w| w.to == output));
 }
+
+/// A splitter's channel pin wired into an AudioChannelMixer's channel pin
+/// carries sound (the mixer wasn't wired at all), and the graph keeps which
+/// channel each end of the wire is.
+#[test]
+fn channel_splitter_into_mixer() {
+    let options = tone_options("audio-api-channels");
+    let mut server = DataModel::new(&options).unwrap();
+    let first = service(&server, "ReplicatedFirst");
+    add_under(
+        &server,
+        first,
+        "LocalScript",
+        "Graph",
+        r#"
+        local function wire(a, b, from, to)
+            local w = Instance.new('Wire') w.SourceInstance = a w.TargetInstance = b
+            if from then w.SourceName = from end
+            if to then w.TargetName = to end
+            w.Parent = workspace
+            return w
+        end
+        local p = Instance.new('AudioPlayer') p.Asset = 'rbxasset://sounds/tone.wav'
+        p.Looping = true p.Parent = workspace
+        local split = Instance.new('AudioChannelSplitter') split.Parent = workspace
+        local mix = Instance.new('AudioChannelMixer') mix.Parent = workspace
+        local heard = Instance.new('AudioAnalyzer') heard.Parent = workspace
+        wire(p, split)
+        local across = wire(split, mix, 'Left', 'Right')
+        wire(mix, heard)
+        print('connected', across.Connected, #mix:GetInputPins())
+        while not p.IsReady do task.wait() end
+        p:Play()
+        task.wait(0.3)
+        print('heard', heard.PeakLevel > 0.1)
+        "#,
+    );
+    server.start();
+    let mut session = Session::new(server, options);
+    let index = session.join("Player1", 1).unwrap();
+    session.run_for(0.8);
+    let client = session.client(index).unwrap();
+    let log = lines(client);
+    for line in ["connected true 13", "heard true"] {
+        assert!(log.contains(&line.to_owned()), "{line}: {log:?}");
+    }
+    let graph = client.audio_graph();
+    assert!(graph.wires.iter().any(|w| {
+        w.from_channel == Some(rook_audio::graph::Channel::Left)
+            && w.to_channel == Some(rook_audio::graph::Channel::Right)
+    }));
+}
