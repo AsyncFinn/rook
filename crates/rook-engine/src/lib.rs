@@ -161,6 +161,9 @@ pub struct DataModel {
     /// Instances a client's trims freed since [`DataModel::take_freed`]:
     /// copies its scripts destroyed, which replication must forget.
     freed: Vec<InstanceId>,
+    /// The local player joined with camera code (see
+    /// [`DataModel::note_camera_scripts`]).
+    camera_scripts: bool,
 }
 
 /// Content requests from scripts, resolved off the engine thread.

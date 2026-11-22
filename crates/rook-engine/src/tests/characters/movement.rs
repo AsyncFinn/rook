@@ -458,6 +458,55 @@ fn a_client_draws_its_camera_before_its_character_spawns() {
     assert!((look - (focus - eye).normalize()).length() < 1e-3, "{look}");
 }
 
+/// A place that turns Roblox's camera off with a CameraScript that
+/// destroys itself, then moves the camera with its own render-step code,
+/// is drawn from where that code puts the camera, as Studio's Play mode
+/// draws it (the window flew its own camera once the stub was gone).
+#[test]
+fn a_place_with_its_own_camera_code_is_drawn_from_it() {
+    let mut server = Server::new(&Options::default()).unwrap();
+    add_script(
+        &server,
+        "ServerScriptService",
+        "Main",
+        "game.Players.CharacterAutoLoads = false",
+    );
+    let stub = add_local_script(&server, "CameraScript", "script:Destroy()");
+    let starter = server.runtime.world().dom.parent(stub).unwrap();
+    add_under(
+        &server,
+        starter,
+        "LocalScript",
+        "Look",
+        r#"local camera = workspace.CurrentCamera
+        game:GetService("RunService").PreRender:Connect(function()
+            camera.CFrame = CFrame.new(3, 40, 7)
+        end)"#,
+    );
+    server.start();
+    let mut session = Session::new(server, Options::default());
+    let index = session.join("Watcher", 9).unwrap();
+    session.run_for(0.2);
+    let client = session.client(index).unwrap();
+    let scripts = {
+        let w = client.runtime().world();
+        let player = w.dom.local_player().unwrap();
+        let ps = w
+            .dom
+            .find_first_child(player, "PlayerScripts", false)
+            .unwrap();
+        w.dom.find_first_child(ps, "CameraScript", false)
+    };
+    assert_eq!(scripts, None, "the stub destroyed itself");
+    let view = client
+        .scripted_camera()
+        .expect("the window flew its own camera");
+    assert!(
+        (view.cframe.position - glam::Vec3::new(3.0, 40.0, 7.0)).length() < 1e-3,
+        "{view:?}"
+    );
+}
+
 /// A camera following the character from the render step, as Roblox's
 /// does, is drawn exactly where the character is drawn: the render step
 /// comes after the frame's physics, so both show the same pose.
