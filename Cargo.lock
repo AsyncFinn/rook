@@ -3932,6 +3932,7 @@ dependencies = [
 name = "rook-lua"
 version = "0.5.1"
 dependencies = [
+ "base64 0.23.1",
  "blake3",
  "chrono",
  "glam 0.33.12",
@@ -3953,6 +3954,7 @@ dependencies = [
  "slotmap",
  "tracing",
  "unicode-normalization",
+ "zstd",
 ]
 
 [[package]]
