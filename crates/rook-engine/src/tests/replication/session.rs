@@ -157,6 +157,48 @@ fn remote_events_and_functions_cross_the_session() {
     );
 }
 
+/// A `buffer` sent through a remote arrives as the receiver's own copy
+/// (creator-docs "Remote events and callbacks" lists buffers among the
+/// values that pass), and the player's ping reads as a number.
+#[test]
+fn remote_buffers_arrive_as_copies() {
+    let mut server = Server::new(&Options::default()).unwrap();
+    let rs = service(&server, "ReplicatedStorage");
+    add_under(&server, rs, "RemoteEvent", "Bytes", "");
+    add_script(
+        &server,
+        "ServerScriptService",
+        "Main",
+        r#"
+        local rs = game:GetService("ReplicatedStorage")
+        rs.Bytes.OnServerEvent:Connect(function(player, b, nested)
+            print(typeof(b), buffer.len(b), buffer.readu8(b, 1), buffer.tostring(nested.inner))
+            buffer.writeu8(b, 0, 99)
+            rs.Bytes:FireClient(player, b)
+            print(typeof(player:GetNetworkPing()))
+        end)
+        "#,
+    );
+    add_local_script(
+        &server,
+        "Client",
+        r#"
+        local rs = game:GetService("ReplicatedStorage")
+        local mine = buffer.fromstring("abc")
+        rs.Bytes.OnClientEvent:Connect(function(b)
+            print(buffer.readu8(b, 0), buffer.readu8(mine, 0))
+        end)
+        rs.Bytes:FireServer(mine, { inner = buffer.fromstring("hi") })
+        "#,
+    );
+    server.start();
+    let mut session = Session::new(server, Options::default());
+    let index = session.join("Player1", 1).unwrap();
+    session.run_for(0.5);
+    assert_eq!(lines(session.server()), ["buffer 3 98 hi", "number"]);
+    assert_eq!(lines(session.client(index).unwrap()), ["99 97"]);
+}
+
 #[test]
 fn input_mouse_and_click_detectors() {
     let mut server = Server::new(&Options::default()).unwrap();
