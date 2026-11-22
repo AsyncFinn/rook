@@ -156,7 +156,9 @@ impl DataModel {
     }
 
     /// Movement of a held mouse: InputChanged with the movement in
-    /// `Delta`, the cursor at the window's center for
+    /// `Delta`, and the frame's movement so far in `GetMouseDelta` (summed
+    /// over the frame's motion events, zeroed when the frame ends), the
+    /// cursor at the window's center for
     /// [`MouseLock::Center`](crate::MouseLock) (Inference: where Roblox
     /// draws it in first person), else where it was.
     pub(super) fn mouse_motion(&mut self, dx: f32, dy: f32) -> bool {
@@ -164,7 +166,8 @@ impl DataModel {
         self.hold_mouse();
         let pos = {
             let mut w = self.runtime.world_mut();
-            w.input.mouse_delta = (dx, dy);
+            w.input.mouse_delta.0 += dx;
+            w.input.mouse_delta.1 += dy;
             w.input.mouse
         };
         let (gx, gy) = gui_point(pos);

@@ -96,6 +96,10 @@ Studio, which Rook's run matches.
   InputChanged's `Delta`. While the mouse is free, a move's `Delta` and
   `GetMouseDelta` are zero (Observed), so the camera only turns while the
   mouse is held.
+- `GetMouseDelta` is the mouse's movement in the last frame (creator-docs
+  UserInputService:GetMouseDelta): every move in that frame added up, and
+  zero once a frame passes without one, so a camera script that turns by it
+  every frame stops when the mouse does.
 - An opaque 20 × 20 × 1 wall 5.5 to 6.5 studs behind the character pulls
   the camera in to 5.775 from its focus: its near plane stops at the wall,
   so the eye is a little inside it. A wall with `CanCollide` off, or
