@@ -37,6 +37,9 @@ pub(super) const SAME_AS: &[(&str, &str, &str)] = &[
     // Files save a truss's Style as `style`, a property of its own in the
     // database (a large older place's NoSupports trusses read back the default).
     ("TrussPart", "Style", "style"),
+    // The older name of an AudioPlayer's asset (creator-docs
+    // AudioPlayer.AssetId, deprecated for Asset); files save Asset.
+    ("AudioPlayer", "AssetId", "Asset"),
 ];
 
 /// BrickColor views of Color3 properties: reads give the nearest
@@ -113,13 +116,25 @@ pub(super) fn view<'a>(
         .map(|(_, _, target)| *target)
 }
 
+/// The property `name` is another name for (`Health_XML` for `Health`),
+/// else `name`'s own.
+fn aliased(w: &World, id: InstanceId, name: &str) -> Option<PropertyId> {
+    w.dom
+        .property_id(id, view(w, id, name, SAME_AS).unwrap_or(name))
+}
+
+/// The `Content` property reads and writes of `name` go to: its own
+/// content view's, or that of the property it's another name for
+/// (`AssetId` is `Asset`, a view of `AudioContent`).
+pub(crate) fn content_target(w: &World, id: InstanceId, name: &str) -> Option<PropertyId> {
+    content_view(aliased(w, id, name)?)
+}
+
 /// The stored property whose changes a property's changed signal hears:
 /// the one a view reads (`Health_XML` for `Health`, `AudioContent` for
-/// `SoundId`), else the property itself.
+/// `SoundId` and `AssetId`), else the property itself.
 pub(crate) fn stored_property(w: &World, id: InstanceId, name: &str) -> Option<PropertyId> {
-    let pid = w
-        .dom
-        .property_id(id, view(w, id, name, SAME_AS).unwrap_or(name))?;
+    let pid = aliased(w, id, name)?;
     Some(content_view(pid).unwrap_or(pid))
 }
 

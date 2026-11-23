@@ -115,6 +115,11 @@ pub(crate) fn from_lua(lua: &Lua, v: &LuaValue, ty: PropertyType) -> Result<Valu
                     },
                     _ => return Err(fail()),
                 },
+                // nil clears custom physical properties (creator-docs
+                // BasePart.CustomPhysicalProperties), as it reads when unset.
+                VariantType::PhysicalProperties if v.is_nil() => {
+                    Value::PhysicalProperties(rbx_types::PhysicalProperties::Default)
+                }
                 VariantType::OptionalCFrame => match v {
                     LuaValue::Nil => Value::OptionalCFrame(None),
                     _ => Value::OptionalCFrame(Some(

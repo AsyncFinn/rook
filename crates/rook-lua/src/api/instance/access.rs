@@ -43,7 +43,7 @@ pub(super) fn read(
     }
     let (value, plain) = {
         let w = c.world.borrow();
-        match prop.and_then(|(pid, _)| properties::content_view(pid)) {
+        match prop.and(properties::content_target(&w, id, name)) {
             Some(target) => (
                 w.dom.property(id, target).map(|v| {
                     Value::ContentId(v.content_url().unwrap_or_default().to_owned().into())
@@ -151,9 +151,13 @@ pub(crate) fn write_property(
     let selection = properties::selection::before(lua, id, name, &converted);
     let result = with_world(lua, |w| {
         properties::copy_icon(w, id, name, &converted)?;
-        if let (Some(target), Some(url)) =
-            (properties::content_view(prop.id), converted.content_url())
-        {
+        // Older names some content properties keep are plain strings
+        // (`AudioPlayer.AssetId`).
+        let url = match &converted {
+            Value::String(s) => Some(s.as_str()),
+            v => v.content_url(),
+        };
+        if let (Some(target), Some(url)) = (properties::content_target(w, id, name), url) {
             // A Decal's or Texture's image set to a web URL is stored as its
             // asset id (`rook_content::image_url_rewrite`).
             let rewritten = (matches!(name, "Texture" | "ColorMap") && w.dom.is_a(id, "Decal"))

@@ -138,6 +138,7 @@ impl DataModel {
             web: Default::default(),
             user_settings: None,
             freed: Vec::new(),
+            camera_scripts: false,
         })
     }
 }

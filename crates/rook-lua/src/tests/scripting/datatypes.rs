@@ -168,3 +168,24 @@ fn faces_axes_and_physical_properties_are_their_own_types() {
         ],
     );
 }
+
+/// Unset custom physical properties read nil, and setting nil unsets them
+/// (measured in Studio 0.748).
+#[test]
+fn custom_physical_properties_unset_is_nil() {
+    expect(
+        r#"
+        local p = Instance.new("Part")
+        print(p.CustomPhysicalProperties)
+        p.CustomPhysicalProperties = PhysicalProperties.new(1, 0.3, 0.5)
+        print(p.CustomPhysicalProperties.Density)
+        p.CustomPhysicalProperties = nil
+        print(p.CustomPhysicalProperties)
+        local q = Instance.new("Part")
+        q.CustomPhysicalProperties = p.CustomPhysicalProperties
+        print(q.CustomPhysicalProperties)
+        "#,
+        0,
+        &["nil", "1", "nil", "nil"],
+    );
+}

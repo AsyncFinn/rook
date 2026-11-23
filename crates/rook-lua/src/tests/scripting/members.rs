@@ -122,3 +122,29 @@ fn legacy_enum_names_resolve() {
         ],
     );
 }
+
+/// `AudioPlayer.AssetId` is `Asset` by its older name: each reads and
+/// writes the other (measured in Studio 0.748, a number included).
+#[test]
+fn audio_player_asset_id_is_asset() {
+    expect(
+        r#"
+        local a = Instance.new("AudioPlayer")
+        a.Asset = "rbxassetid://123"
+        print(a.AssetId)
+        a.AssetId = "rbxassetid://456"
+        print(a.Asset)
+        a.AssetId = 5
+        print(a.Asset, typeof(a.AssetId))
+        a:GetPropertyChangedSignal("AssetId"):Connect(function() print("AssetId changed") end)
+        a.Asset = "rbxassetid://789"
+        "#,
+        0,
+        &[
+            "rbxassetid://123",
+            "rbxassetid://456",
+            "5 string",
+            "AssetId changed",
+        ],
+    );
+}

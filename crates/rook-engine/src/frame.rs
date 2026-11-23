@@ -60,6 +60,10 @@ impl DataModel {
             // pose this frame's physics left and the drawing shows the
             // same (Roblox: RenderStepped, draw, physics, each frame).
             self.render_phase(dt);
+            // `GetMouseDelta` is the movement since the last frame: none
+            // until the mouse moves again (creator-docs
+            // UserInputService:GetMouseDelta).
+            self.runtime.world_mut().input.mouse_delta = (0.0, 0.0);
         }
         self.start_new_scripts();
         {
