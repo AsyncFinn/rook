@@ -151,7 +151,7 @@ pub(crate) fn from_lua(lua: &Lua, v: &LuaValue, ty: PropertyType) -> Result<Valu
 /// and -2147483648 for NaN, the infinities and anything past an `i32` on
 /// either side, as x86's truncating conversion gives. Measured on
 /// `UDim.Offset` and `SoundEffect.Priority` (2^31, -2^31 - 1, 1e12 and
-/// NaN all read -2147483648; conformance case `content/sound_effects`).
+/// NaN all read -2147483648; conformance case `content/int_properties`).
 pub(crate) fn int32(n: f64) -> i32 {
     let cut = n.trunc();
     if (f64::from(i32::MIN)..=f64::from(i32::MAX)).contains(&cut) {
@@ -241,7 +241,7 @@ pub(crate) fn variant_name(vt: VariantType) -> &'static str {
         VariantType::BrickColor => "BrickColor",
         VariantType::UDim => "UDim",
         VariantType::UDim2 => "UDim2",
-        // Confirmed (conformance content/sound_effects): "Unable to assign
+        // Confirmed (conformance content/int_properties): "Unable to assign
         // property SideChain. Instance expected, got string".
         VariantType::Ref => "Instance",
         VariantType::NumberRange => "NumberRange",
