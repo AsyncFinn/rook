@@ -5,6 +5,8 @@ Every release, newest first. How versions are numbered is in
 
 ## [Unreleased]
 
+- A member's argument that doesn't cast names a table as `Array` or `Dictionary` in its error, and an EnumItem as its enum, as in Roblox. Rook named either by its type in some members' errors.
+- A member function called with an instance of another class in place of `self` raises `Expected ':' not '.'`, as in Roblox. Rook ran the member on whatever instance it was given. See [member lookup](docs/behavior/scripting/member-lookup.md#calling-a-member-function).
 - An integer property set to NaN or a number past what it holds reads as the lowest integer, and assigning a reference property something that isn't an Instance says an Instance was expected, as in Roblox. Rook kept such numbers just inside the range and read NaN as 0, and said an Object was expected.
 - Light, shadows and the sky's light follow the camera to where it moves on a busy or slow machine. Rook could keep lighting only where the camera had been, for as long as the machine stayed busy. See [local lights](docs/behavior/lighting/local-lights.md).
 - AudioChannelMixer takes sound in through its channel pins, and AudioChannelSplitter's channel pins carry only their channel, as in Roblox. Rook left the mixer unwired, so everything sent through one was silent, and sent the whole sound out of every splitter pin. See [the audio API](docs/behavior/audio/audio-api.md).

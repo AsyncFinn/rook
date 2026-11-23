@@ -61,6 +61,8 @@ fn preload_async_on_a_server() {
         end
         print(pcall(CP.PreloadAsync, CP, {true}))
         print(pcall(CP.PreloadAsync, CP, {}, 5))
+        print(pcall(CP.PreloadAsync, CP, {{}}))
+        print(pcall(CP.PreloadAsync, CP, {}, {x = 1}))
         "#,
     )
     .unwrap();
@@ -73,6 +75,8 @@ fn preload_async_on_a_server() {
             "false Unable to cast double to Array",
             "false Unable to cast bool to ContentId",
             "false Unable to cast double to Function",
+            "false Unable to cast Array to ContentId",
+            "false Unable to cast Dictionary to Function",
         ]
     );
 }

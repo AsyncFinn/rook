@@ -28,3 +28,14 @@ Writes never fall back: `part.anchored = true` errors
 Old game scripts and Roblox's own CoreScripts both rely on the read
 fallback (`RunService.renderStepped`, `.name`,
 `RbxAnalyticsService:setRBXEventStream`).
+
+## Calling a member function
+
+A member function read from one instance can be called with another as
+`self` only if it is of the class that declares the member. Anything
+else, an instance of another class included, raises `Expected ':' not '.'
+calling member function <name>`, as a missing `self` does, before the
+member casts its arguments. Confirmed in Studio 0.748 on 2026-11-23, on a
+playtest server and client: `Player:Kick` and `Player:GetJoinData` called
+with Workspace, Players or nil, and `Player:GetRankInGroup` called with
+Workspace. Code: `own_class` in `rook-lua/src/api/instance/calls.rs`.
