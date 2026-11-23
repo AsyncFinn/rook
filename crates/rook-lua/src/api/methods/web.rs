@@ -5,6 +5,7 @@ use crate::api::methods::{RawMethod, first};
 pub(crate) mod data_stores;
 pub(crate) mod filtering;
 pub(crate) mod http;
+mod json;
 pub(crate) mod requests;
 mod users;
 

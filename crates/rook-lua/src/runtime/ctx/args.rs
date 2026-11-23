@@ -235,6 +235,20 @@ impl Args {
         !matches!(self.get(i), LuaValue::Nil | LuaValue::Boolean(false))
     }
 
+    /// A `bool` parameter as Roblox casts it: `default` when nil or left
+    /// out, a boolean as itself, anything else `Unable to cast string to
+    /// bool` (measured on `HttpService:GenerateGUID("x")`).
+    pub(crate) fn bool_or(&self, i: usize, default: bool) -> ApiResult<bool> {
+        match self.get(i) {
+            LuaValue::Nil => Ok(default),
+            LuaValue::Boolean(b) => Ok(*b),
+            v => Err(ScriptError(format!(
+                "Unable to cast {} to bool",
+                cast_name(v)
+            ))),
+        }
+    }
+
     /// An `Object` parameter as Roblox casts it: a missing argument errors,
     /// an explicit `nil` is the null object (`None`), anything but an
     /// Instance doesn't cast. Measured: `Debris:AddItem(nil)` and
