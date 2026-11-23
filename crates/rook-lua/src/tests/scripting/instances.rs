@@ -217,7 +217,7 @@ fn get_children_is_never_stale() {
     );
 }
 
-/// Measured (conformance case `content/sound_effects`): an int property
+/// Measured (conformance case `content/int_properties`): an int property
 /// cuts a fraction toward zero, and NaN or anything past an `i32` reads
 /// -2147483648 on either side, as a UDim's offset does. A reference
 /// property names what it wanted as Instance.
