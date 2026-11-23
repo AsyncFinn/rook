@@ -216,3 +216,28 @@ fn get_children_is_never_stale() {
         ["A A", "A,B B", "B,B", "B", "1 B true", "B,C", "B,C,D"]
     );
 }
+
+/// Measured (conformance case `content/sound_effects`): an int property
+/// cuts a fraction toward zero, and NaN or anything past an `i32` reads
+/// -2147483648 on either side, as a UDim's offset does. A reference
+/// property names what it wanted as Instance.
+#[test]
+fn int_and_reference_properties_take_values_as_studio_does() {
+    expect(
+        r#"
+        local e = Instance.new("ChorusSoundEffect")
+        local t = {}
+        for _, v in {-5, 2.7, -2.7, 2^31 - 1, 2^31, -2^31 - 1, 1e12, 0/0, "3"} do
+            e.Priority = v
+            table.insert(t, e.Priority)
+        end
+        print(table.concat(t, " "))
+        print(pcall(function() Instance.new("ObjectValue").Value = "x" end))
+        "#,
+        0,
+        &[
+            "-5 2 -2 2147483647 -2147483648 -2147483648 -2147483648 -2147483648 3",
+            "false Unable to assign property Value. Instance expected, got string",
+        ],
+    );
+}
