@@ -94,6 +94,10 @@ struct Args {
     /// in builds with developer overrides).
     #[arg(long = settings::CORE_SCRIPTS.long())]
     core_scripts: bool,
+    /// Leave out Rook's own in-game menu, its button and what it does on
+    /// Escape, which then closes the player (the `menu` setting).
+    #[arg(long = settings::MENU.long())]
+    no_menu: bool,
     /// Present frames as fast as they're drawn, whatever the player's
     /// `FramerateCap` says (the `uncapped` setting).
     #[arg(long = settings::UNCAPPED.long())]
@@ -231,6 +235,7 @@ fn play(args: &Args) -> anyhow::Result<()> {
         // time however fast it runs.
         wait_for_sounds: args.record_audio.is_some(),
         core_scripts,
+        menu: settings::menu(args.no_menu),
         user_settings: None,
     };
     if args.windowed() && !args.crash_test {

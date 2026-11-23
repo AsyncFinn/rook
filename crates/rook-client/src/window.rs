@@ -362,6 +362,10 @@ impl App {
         self.last_frame = now;
         self.apply_inbox(event_loop);
         let drawn = self.update(dt);
+        // The menu's Leave.
+        if self.game.leaving() {
+            event_loop.exit();
+        }
         self.return_cursor();
         self.follow_mouse_lock();
         self.draw(drawn);

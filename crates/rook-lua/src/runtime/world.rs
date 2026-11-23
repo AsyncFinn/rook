@@ -268,6 +268,9 @@ pub struct World {
     /// Rook's own `RookOutputDevice` setting changed: it has no property
     /// for the journal to note (`crate::user_settings::set_output_device`).
     pub output_device_chosen: bool,
+    /// A client's script called `game:Shutdown()` (the menu's Leave): its
+    /// host closes it.
+    pub shutdown: bool,
     /// The machine's output devices, as the window listed them when the
     /// game started; empty where nothing plays sound.
     pub output_devices: rook_audio::OutputDevices,
@@ -374,6 +377,7 @@ impl World {
             core_scripts: None,
             user_settings: None,
             output_device_chosen: false,
+            shutdown: false,
             output_devices: rook_audio::OutputDevices::default(),
             fast_flags: Default::default(),
             defined_flags: FxHashMap::default(),

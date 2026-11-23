@@ -13,6 +13,7 @@ pub mod core_scripts;
 pub mod data_folder;
 mod frame;
 pub mod logging;
+pub mod menu;
 mod rigs;
 mod scripts;
 pub mod session;
@@ -97,6 +98,9 @@ pub struct Options {
     /// Roblox's CoreScripts, which clients run for the GUI Roblox draws
     /// itself (`settings::core_scripts`); `None` runs without them.
     pub core_scripts: Option<Arc<core_scripts::CorePatch>>,
+    /// Clients run Rook's own in-game menu ([`menu`], the `menu`
+    /// setting) when they don't run Roblox's CoreScripts.
+    pub menu: bool,
     /// Where scripts' web requests go; `None` uses `settings::endpoints`.
     pub endpoints: Option<Arc<rook_platform::endpoints::Endpoints>>,
     /// The player's settings file (`UserSettings().GameSettings`, see
@@ -114,6 +118,7 @@ impl Default for Options {
             content: None,
             wait_for_sounds: true,
             core_scripts: None,
+            menu: false,
             endpoints: None,
             user_settings: None,
         }
@@ -219,6 +224,12 @@ impl DataModel {
 
     pub fn role(&self) -> Role {
         self.role
+    }
+
+    /// A script called `game:Shutdown()` (the menu's Leave): whoever shows
+    /// this client should close it.
+    pub fn shutdown_requested(&self) -> bool {
+        self.runtime.world().shutdown
     }
 
     pub fn set_auto_trim(&mut self, on: bool) {

@@ -35,6 +35,6 @@ Code: `rook-lua/src/api/luau/context_action.luau` keeps the bindings;
 `rook-engine/src/bridges/input.rs` offers each InputObject to them
 (`DataModel::deliver`, in `bridges/input.rs`) before firing UserInputService's event.
 
-- The menu's Cancel isn't sent yet: Rook's menu is Roblox's CoreScripts',
-  and the Cancel belongs to M19 step 4 with the rest of
+- The menu's Cancel isn't sent yet, by Roblox's CoreScripts' menu or
+  [Rook's own](../gui/menu.md); it belongs to M19 step 4 with the rest of
   ContextActionService.

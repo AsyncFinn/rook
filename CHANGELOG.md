@@ -5,6 +5,7 @@ Every release, newest first. How versions are numbered is in
 
 ## [Unreleased]
 
+- `rook-player` has an in-game menu of its own when Roblox's CoreScripts aren't running: a button with Rook's logo at the top left, or Escape, opens the volume, output device, fullscreen, frame rate and camera settings, with Leave and Resume, laid out like Roblox's menu. Camera Sensitivity takes any number typed in. Games hear it through `GuiService.MenuIsOpen`, `MenuOpened` and `MenuClosed`, and `SetCore("TopbarEnabled", false)` hides the button. Escape closed the player, and there was no way to change settings while playing. `--no-menu` (or `ROOK_MENU=off`) leaves it out. See [the menu](docs/behavior/gui/menu.md).
 - Light, shadows and the sky's light follow the camera to where it moves on a busy or slow machine. Rook could keep lighting only where the camera had been, for as long as the machine stayed busy. See [local lights](docs/behavior/lighting/local-lights.md).
 - AudioChannelMixer takes sound in through its channel pins, and AudioChannelSplitter's channel pins carry only their channel, as in Roblox. Rook left the mixer unwired, so everything sent through one was silent, and sent the whole sound out of every splitter pin. See [the audio API](docs/behavior/audio/audio-api.md).
 - A part's `CustomPhysicalProperties` reads nil until it's set and can be set back to nil, as in Roblox. Rook read an empty PhysicalProperties value for an unset one and raised an error for nil. See [Faces, Axes and PhysicalProperties](docs/behavior/scripting/faces-and-axes.md).
