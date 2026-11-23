@@ -104,7 +104,8 @@ pub struct InputState {
     pub buttons: [bool; 3],
     /// Cursor position in pixels from the viewport's top left.
     pub mouse: (f32, f32),
-    /// Cursor movement during the last event.
+    /// Cursor movement so far this frame: every motion event added up,
+    /// back to zero when a client frame ends (`GetMouseDelta`).
     pub mouse_delta: (f32, f32),
     /// The local player's Mouse (`Player:GetMouse()`).
     pub mouse_object: Option<InstanceId>,
