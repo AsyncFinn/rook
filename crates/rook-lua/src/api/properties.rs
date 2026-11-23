@@ -25,7 +25,7 @@ use part::{orientation, rotation, saved_fidelity, set_cframe_alone};
 use sound::set_sound;
 use views::{BRICK_COLOR_OF, SAME_AS, is_text_object, view};
 pub(crate) use views::{
-    changed_name, content_value, content_view, stored_property, wrong_ref_class,
+    changed_name, content_target, content_value, content_view, stored_property, wrong_ref_class,
 };
 
 pub(super) fn set_named(

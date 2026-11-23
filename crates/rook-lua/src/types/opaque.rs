@@ -45,6 +45,9 @@ pub(crate) fn opaque(lua: &Lua, v: Value) -> mlua::Result<LuaValue> {
     match v {
         Value::Faces(_) => Opaque::<FACES>(v).into_lua(lua),
         Value::Axes(_) => Opaque::<AXES>(v).into_lua(lua),
+        // A part without custom physical properties reads nil (creator-docs
+        // BasePart.CustomPhysicalProperties: "nil if not set").
+        Value::PhysicalProperties(rbx_types::PhysicalProperties::Default) => Ok(LuaValue::Nil),
         Value::PhysicalProperties(_) => Opaque::<PHYSICAL_PROPERTIES>(v).into_lua(lua),
         _ => Opaque::<OTHER>(v).into_lua(lua),
     }

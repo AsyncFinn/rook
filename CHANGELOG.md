@@ -5,6 +5,8 @@ Every release, newest first. How versions are numbered is in
 
 ## [Unreleased]
 
+- A part's `CustomPhysicalProperties` reads nil until it's set and can be set back to nil, as in Roblox. Rook read an empty PhysicalProperties value for an unset one and raised an error for nil. See [Faces, Axes and PhysicalProperties](docs/behavior/scripting/faces-and-axes.md).
+- `AudioPlayer.AssetId` reads and writes the player's `Asset`, as in Roblox. Rook read it as empty, so scripts that look sounds up by it found none. See [the audio API](docs/behavior/audio/audio-api.md).
 - Places that turn Roblox's camera off and move the camera with their own scripts are shown from their camera, as in Roblox. Rook flew its own free camera in them, once the script that turned Roblox's camera off had removed itself. See [the default camera and controls](docs/behavior/characters/camera.md#in-rook).
 - `HttpService:JSONEncode` writes an empty table as `[]` and a table with an array part as that array, as in Roblox. Rook wrote both as objects, so web APIs expecting a list refused them. See [JSON](docs/behavior/scripting/json.md).
 - `UserInputService:GetMouseDelta` is the mouse's movement in the last frame, as in Roblox. Rook gave the last single move for as long as the mouse stayed still, so cameras that turn by it every frame kept turning. See [the default camera and controls](docs/behavior/characters/camera.md#zoom-occlusion-and-first-person).
