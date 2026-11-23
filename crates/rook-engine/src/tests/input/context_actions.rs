@@ -98,6 +98,42 @@ fn a_locked_mouse_moves_by_deltas() {
     );
 }
 
+/// `GetMouseDelta` is the frame's movement: every motion event since the
+/// last frame added up, and zero once the mouse stops (a camera that turns by
+/// it every frame would otherwise keep turning).
+#[test]
+fn mouse_delta_is_the_frames_movement() {
+    let mut server = Server::new(&Options::default()).unwrap();
+    let starter = service(&server, "StarterGui");
+    let screen = add_under(&server, starter, "ScreenGui", "Hud", "");
+    add_under(
+        &server,
+        screen,
+        "LocalScript",
+        "Look",
+        r#"
+        local uis = game:GetService("UserInputService")
+        uis.MouseBehavior = Enum.MouseBehavior.LockCenter
+        local last = Vector2.zero
+        game:GetService("RunService").RenderStepped:Connect(function()
+            local d = uis:GetMouseDelta()
+            if d ~= last then
+                print(d.X, d.Y)
+                last = d
+            end
+        end)
+        "#,
+    );
+    server.start();
+    let mut session = Session::new(server, Options::default());
+    let index = session.join("Looker", 1).unwrap();
+    session.run_for(0.1);
+    session.input(index, InputEvent::MouseMotion { dx: 3.0, dy: -2.0 });
+    session.input(index, InputEvent::MouseMotion { dx: 1.0, dy: 1.0 });
+    session.run_for(0.1);
+    assert_eq!(lines(session.client(index).unwrap()), ["4 -1", "0 0"]);
+}
+
 /// A mouse locked to the center is at the center from the frame the lock
 /// comes, before it moves: the engine holds it there, not a window's
 /// warp, so a host that only reports its cursor (or none) still gives
