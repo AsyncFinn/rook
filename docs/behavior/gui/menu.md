@@ -1,6 +1,13 @@
 # Rook's in-game menu
 
-Laid out against Studio 0.744's in-game menu on 2026-11-22.
+Checked against Studio 0.744 on 2026-11-22, beside Roblox's in-game menu.
+
+The menu is a Rook extension ([behavior provenance](../../design/architecture.md#behavior-provenance)):
+Roblox's own comes from its CoreScripts. What games see of it
+(`GuiService`'s members, `SetCore("TopbarEnabled")`) follows
+creator-docs; where it copies the look or behavior of Roblox's menu,
+that's tagged Approximation or Inference below, since no creator-docs
+page or conformance recording covers Roblox's menu.
 
 [M8](../../roadmap/m8-gui.md) step 9's first piece of Rook's own
 CoreGui: the logo button at the top left and the menu it opens, with
@@ -31,15 +38,16 @@ window's Escape and Leave in `rook-client`.
 
 ## Layout
 
-Sizes and colors are Roblox's, read from its menu in a Studio client
-(1732 by 1121 window) on 2026-11-22:
+Sizes and colors follow Roblox's menu as a Studio client drew it (1732
+by 1121 window) on 2026-11-22 (Approximation: taken from how it looks,
+not measured in isolation or recorded):
 
 - The button: 44 by 44 at (16, 12), round, (18, 18, 21) at
   BackgroundTransparency 0.02, with a 24-pixel logo in it: Roblox's menu
   button is the same, with its own logo. It stays bright over the open
   menu, and lightens while hovered.
 - The screen darkens (black at 0.5) under a button covering it, as
-  Roblox's `SettingsShield` is an ImageButton: the topmost button under
+  Roblox's `SettingsShield` is an ImageButton (Inference): the topmost button under
   the cursor takes a click whatever covers it ([input](input.md#buttons)),
   so the game's buttons behind the menu get none. The panel is 840 by 734, black
   at 0.06, round by 10, centered; in a smaller window it keeps 20 pixels
@@ -59,7 +67,7 @@ Sizes and colors are Roblox's, read from its menu in a Studio client
   right end (white at 0.92, round by 8), after the plus, as Roblox's
   row does. It empties when clicked, showing the value faintly, and
   takes the new one on Enter or a click elsewhere; what isn't a number
-  from 0.01 leaves the value as it was. Roblox's box stops at 4;
+  from 0.01 leaves the value as it was. Roblox's box stops at 4 (Inference);
   Rook's doesn't, and the slider then shows all ten steps.
 - A slider is ten steps, 24 tall, light (217, 217, 217) up to the value
   and dark (57, 59, 61) after, round at the ends, between circled minus
@@ -102,9 +110,9 @@ shows its default and warns, rather than stopping the menu.
 - Respawn (R) is shown grayed out and does nothing: Rook has no death to
   respawn from yet ([M9](../../roadmap/m9-characters.md)).
 - While the menu is open, a Modal button frees the mouse, as Roblox's
-  menu does, and W, A, S, D, Space and the arrow keys are kept from the
+  menu does (Inference), and W, A, S, D, Space and the arrow keys are kept from the
   game's ContextActionService bindings (a core action at priority 3000
-  that sinks them). UserInputService still hears them, as in Roblox.
+  that sinks them). UserInputService still hears them, as in Roblox (Inference).
 
 ## What games see
 

@@ -55,6 +55,7 @@
     - [GUI modern UI objects](behavior/gui/modern.md): UICorner, UIStroke, UIGradient, flex, UITableLayout, UIPageLayout, CanvasGroup
     - [Viewport frames](behavior/gui/viewport-frames.md): its picture, its own light and fog, what draws in it
     - [Roblox's core scripts](behavior/gui/core-scripts.md): where Studio keeps them, running them as Roblox's own code, StyleSheets, what Rook lacks
+    - [Rook's in-game menu](behavior/gui/menu.md): Rook's own menu when the core scripts don't run, its settings, keys, what games see
     - [Chat](behavior/gui/chat.md): TextChatService's setup, sending and delivering messages
     - [GUI selection](behavior/gui/selection.md): what moving SelectedObject fires, what GuiService:Select picks
     - [Proximity prompts](behavior/gui/proximity-prompts.md): which show, keys and holds, the events on both sides, Roblox's prompt GUI

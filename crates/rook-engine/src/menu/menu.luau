@@ -1,9 +1,10 @@
 --!nocheck
 -- Rook's in-game menu: the button at the top left and the menu it opens,
 -- with the player's settings (docs/behavior/gui/menu.md). A client runs it
--- as a CoreScript when Roblox's own CoreScripts don't, so it lays out as
--- Roblox's menu does (sizes and colors measured in Studio), with Rook's
--- logo and no art of Roblox's.
+-- as a CoreScript when Roblox's own CoreScripts don't. It is a Rook
+-- extension laid out after Roblox's menu (Approximation: its sizes and
+-- colors follow how Roblox's looks in Studio), with Rook's logo and no
+-- art of Roblox's.
 
 local CoreGui = game:GetService("CoreGui")
 local GuiService = game:GetService("GuiService")
