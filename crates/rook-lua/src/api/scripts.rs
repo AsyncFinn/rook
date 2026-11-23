@@ -317,6 +317,67 @@ fn run_in(lua: &Lua, chunk_name: &str, source: &str, env: Table) -> mlua::Result
 
 // require
 
+/// The script whose code called into the engine: the `script` global of the
+/// nearest frame that isn't Rook's own Luau or a native function.
+fn calling_script(lua: &Lua) -> Option<InstanceId> {
+    for level in 0.. {
+        let frame = lua.inspect_stack(level, |d| {
+            let rook = d
+                .source()
+                .source
+                .is_some_and(|s| s.trim_start_matches('=').starts_with("[rook]"));
+            (!rook).then(|| d.function().environment()).flatten()
+        })?;
+        if let Some(env) = frame {
+            let script = env.raw_get::<LuaValue>("script").ok()?;
+            return match script {
+                LuaValue::UserData(u) => u.borrow::<LuaInstance>().ok().map(|i| i.0),
+                _ => None,
+            };
+        }
+    }
+    None
+}
+
+/// Resolve a require-by-string path against the calling script, by Luau's
+/// rules as Roblox applies them to instances (measured in Studio 0.748):
+/// `@self` starts at the script itself, `./` at its parent (its siblings)
+/// and `../` at its grandparent; after the prefix, `..` goes one parent up,
+/// empty and `.` components are skipped, and every other component names a
+/// child.
+/// Each failure is `error requiring "<path>": <why>`, with Studio's reasons.
+fn require_path(lua: &Lua, path: &str) -> ApiResult<InstanceId> {
+    let fail = |why: &str| ScriptError(format!("error requiring \"{path}\": {why}"));
+    let script = calling_script(lua)
+        .ok_or_else(|| ScriptError(format!("require(\"{path}\") must be called from a script")))?;
+    let parent = |id: InstanceId| with_world(lua, |w| w.dom.parent(id));
+    let context = || fail("could not get parent of requiring context");
+    let (mut at, rest) = if let Some(rest) = path.strip_prefix("./") {
+        (parent(script).ok_or_else(context)?, rest)
+    } else if let Some(rest) = path.strip_prefix("../") {
+        (parent(script).and_then(parent).ok_or_else(context)?, rest)
+    } else if let Some(alias) = path.strip_prefix('@') {
+        let (name, rest) = alias.split_once('/').unwrap_or((alias, ""));
+        if name != "self" {
+            return Err(fail(&format!("@{name} is not a valid alias")));
+        }
+        (script, rest)
+    } else {
+        return Err(fail(
+            "require path must start with a valid prefix: ./, ../, or @",
+        ));
+    };
+    for part in rest.split('/').filter(|p| !p.is_empty() && *p != ".") {
+        at = if part == ".." {
+            parent(at).ok_or_else(|| fail("could not get parent of component \"..\""))?
+        } else {
+            with_world(lua, |w| w.dom.find_first_child(at, part, false))
+                .ok_or_else(|| fail(&format!("could not resolve child component \"{part}\"")))?
+        };
+    }
+    Ok(at)
+}
+
 fn require(lua: &Lua, args: MultiValue) -> ApiResult<Outcome> {
     let a = Args::new(args, "require");
     let module = match a.get(0) {
@@ -325,6 +386,17 @@ fn require(lua: &Lua, args: MultiValue) -> ApiResult<Outcome> {
             return super::methods::content::assets::require_asset(lua, *n as f64);
         }
         LuaValue::Number(n) => return super::methods::content::assets::require_asset(lua, *n),
+        LuaValue::String(path) => {
+            let path = path.to_string_lossy();
+            let found = require_path(lua, &path)?;
+            // Measured: `require("./")` reaches the script's parent Folder.
+            if !with_world(lua, |w| w.dom.is_a(found, "ModuleScript")) {
+                return Err(ScriptError(format!(
+                    "Unable to require module from given path '{path}'"
+                )));
+            }
+            Some(found)
+        }
         _ => None,
     }
     .ok_or_else(|| ScriptError("Attempted to call require with invalid argument(s).".into()))?;

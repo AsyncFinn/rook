@@ -1,0 +1,7 @@
+-- studio 0.748.0.7481526
+-- signals: deferred
+Priority 2.147e+09 true -2147483648
+Priority -2.147e+09 true -2147483648
+Priority 1e+12 true -2147483648
+Priority nan true -2147483648
+SideChain string error Unable to assign property SideChain. Instance expected, got string

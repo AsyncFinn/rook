@@ -44,16 +44,12 @@ impl UserData for LPath2DControlPoint {
     }
 }
 
-/// Offsets are integers. Measured: fractions are cut toward zero (3.7 is
-/// 3, -3.7 is -3), and NaN, infinities and anything past an `i32` read
-/// -2147483648 whichever side they're on.
+/// Offsets are integers, made as every 32-bit integer is. Measured:
+/// fractions are cut toward zero (3.7 is 3, -3.7 is -3), and NaN,
+/// infinities and anything past an `i32` read -2147483648 whichever side
+/// they're on.
 fn offset(v: Num) -> i32 {
-    let cut = v.0.trunc();
-    if (i32::MIN as f64..=i32::MAX as f64).contains(&cut) {
-        cut as i32
-    } else {
-        i32::MIN
-    }
+    crate::runtime::ctx::convert::int32(v.0)
 }
 
 fn fmt_udim(u: UDim) -> String {
