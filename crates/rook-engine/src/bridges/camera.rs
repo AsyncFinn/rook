@@ -72,12 +72,33 @@ fn camera_ids() -> &'static CameraIds {
 }
 
 impl DataModel {
+    /// Note whether the local player joined with camera code: Roblox's
+    /// PlayerModule or a place's own CameraScript in PlayerScripts, before
+    /// any of its scripts run. Read once, at join: a place that turns
+    /// Roblox's camera off with a CameraScript that destroys itself (an
+    /// old, common way) still drives its camera, with its own code.
+    pub(crate) fn note_camera_scripts(&mut self) {
+        let w = self.runtime.world();
+        let dom = &w.dom;
+        let joined = dom.local_player().is_some_and(|p| {
+            let scripts = dom.find_first_child(p, "PlayerScripts", false);
+            let has =
+                |name| scripts.is_some_and(|s| dom.find_first_child(s, name, false).is_some());
+            has("PlayerModule") || has("CameraScript")
+        });
+        drop(w);
+        self.camera_scripts = joined;
+    }
+
     /// The current camera's view when a script drives it: a Scriptable
-    /// camera, or a local player with a camera script in PlayerScripts
-    /// (Roblox's PlayerModule or a place's own CameraScript), character or
-    /// not: before one spawns the camera stays Fixed where the client made
-    /// it, and input doesn't move it (measured). Otherwise the window flies
-    /// its own camera.
+    /// camera, or a local player who joined with camera code, whatever
+    /// that code does later, character or not: before one spawns the camera
+    /// stays Fixed where the client made it, and input doesn't move it
+    /// (measured). Studio's Play mode always draws the current camera; the
+    /// window flies its own camera in Run mode (as Studio's editor camera
+    /// does) or when the player got no camera code, which only happens
+    /// when Rook can't give the scripts Roblox would (no client packages,
+    /// or a place that brings only a 2017 ControlScript).
     pub fn scripted_camera(&self) -> Option<CameraView> {
         let camera = self.current_camera()?;
         let w = self.runtime.world();
@@ -85,12 +106,7 @@ impl DataModel {
         let ids = camera_ids();
         let cframe_of = |property| dom.read_property(camera, property, Value::as_cframe);
         let scriptable = dom.enum_item(camera, ids.camera_type) == Some("Scriptable");
-        let played = dom.local_player().is_some_and(|p| {
-            let scripts = dom.find_first_child(p, "PlayerScripts", false);
-            let has =
-                |name| scripts.is_some_and(|s| dom.find_first_child(s, name, false).is_some());
-            has("PlayerModule") || has("CameraScript")
-        });
+        let played = self.camera_scripts && dom.local_player().is_some();
         (scriptable || played).then(|| {
             let drawn = dom.drawn_cframe(camera).unwrap_or(CFrame::IDENTITY);
             let cframe = rook_lua::rolled(drawn, w.camera_roll(camera));

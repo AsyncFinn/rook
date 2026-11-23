@@ -76,6 +76,7 @@ impl ClientHost {
         if let Some(patch) = &options.core_scripts {
             patch.install(&client);
         }
+        client.note_camera_scripts();
         client.start();
         Ok(Self {
             client,

@@ -224,9 +224,11 @@ fn to_json(v: &LuaValue, depth: usize) -> ApiResult<serde_json::Value> {
         }
         LuaValue::String(s) => J::String(s.to_string_lossy()),
         LuaValue::Table(t) => {
+            // Measured in Studio 0.748: a table with a length (`#t`) is an
+            // array of 1 to that length, nil as null and other keys
+            // dropped; an empty one is `[]`; the rest are objects.
             let len = t.raw_len();
-            let count = t.clone().pairs::<LuaValue, LuaValue>().count();
-            if len > 0 && count == len {
+            if len > 0 || t.is_empty() {
                 let mut out = Vec::with_capacity(len);
                 for i in 1..=len {
                     out.push(to_json(&t.raw_get::<LuaValue>(i)?, depth + 1)?);
