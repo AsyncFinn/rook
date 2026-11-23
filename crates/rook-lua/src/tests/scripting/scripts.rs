@@ -279,3 +279,71 @@ fn getfenv_gives_the_script_environment_at_every_level() {
         ],
     );
 }
+
+/// A ModuleScript named `name` under `parent`, running `source`.
+fn module(
+    rt: &Runtime,
+    parent: rook_dom::InstanceId,
+    name: &str,
+    source: &str,
+) -> rook_dom::InstanceId {
+    let mut w = rt.world_mut();
+    let module = w.dom.create_by_name("ModuleScript").unwrap();
+    w.dom.set_name(module, name.into()).unwrap();
+    let source_id = w.dom.property_id(module, "Source").unwrap();
+    w.dom
+        .set_property(module, source_id, rook_types::Value::String(source.into()))
+        .unwrap();
+    w.dom.set_parent(module, Some(parent)).unwrap();
+    module
+}
+
+/// Require by string, as Luau's rules apply to instances: `@self/` from the
+/// requiring script, `./` from its parent and `../` one parent further, with
+/// Studio 0.748's errors.
+#[test]
+fn require_by_string_paths() {
+    let rt = Runtime::new(Dom::new(), Clock::Fixed { step: 1.0 / 60.0 }).unwrap();
+    let ws = rt.world_mut().dom.get_service("Workspace").unwrap();
+    let lib = module(&rt, ws, "Lib", "return require('@self/Inner')");
+    module(
+        &rt,
+        lib,
+        "Inner",
+        "return require('./Sibling') + require('../Top')",
+    );
+    module(&rt, lib, "Sibling", "return 1");
+    module(&rt, ws, "Top", "return 10");
+    let main = rt.world_mut().dom.create_by_name("Script").unwrap();
+    rt.world_mut().dom.set_parent(main, Some(ws)).unwrap();
+    rt.run_source(
+        "Workspace.Script",
+        r#"
+        print(require("./Lib"), require("./Lib") == require(workspace.Lib))
+        print(pcall(require, "./Missing"))
+        print(pcall(require, "Lib"))
+        print(pcall(require, "@foo/Lib"))
+        print(pcall(require, "./Lib/../Top"), pcall(require, ".//Top"))
+        print(pcall(require, "././Top"))
+        print(pcall(require, "../../X"))
+        print(pcall(require, "../X/../../X"))
+        print(pcall(require, "./"))
+        "#,
+        Some(main),
+    )
+    .unwrap();
+    assert_eq!(
+        finish(&rt, 2),
+        [
+            "11 true",
+            "false error requiring \"./Missing\": could not resolve child component \"Missing\"",
+            "false error requiring \"Lib\": require path must start with a valid prefix: ./, ../, or @",
+            "false error requiring \"@foo/Lib\": @foo is not a valid alias",
+            "true true 10",
+            "true 10",
+            "false error requiring \"../../X\": could not get parent of component \"..\"",
+            "false error requiring \"../X/../../X\": could not resolve child component \"X\"",
+            "false Unable to require module from given path './'",
+        ]
+    );
+}

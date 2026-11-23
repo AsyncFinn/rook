@@ -1,7 +1,8 @@
-//! Scripting (docs/behavior/scripting/): datatypes, errors, instances,
-//! JSON, members, arguments, scheduling, scripts and tweens.
+//! Scripting (docs/behavior/scripting/): datatypes, encoding, errors,
+//! instances, JSON, members, arguments, scheduling, scripts and tweens.
 
 mod datatypes;
+mod encoding;
 mod errors;
 mod instances;
 mod json;
