@@ -42,10 +42,12 @@ pub(super) fn method_function(
     let native = methods::native(owner, &resolved);
     let inert = native.is_some() && methods::is_inert(owner, &resolved);
     let resolved: &'static str = Box::leak(resolved.into_boxed_str());
+    let owner_class = database().class_by_name(owner).map(|c| c.id);
     let f = match native {
         Some(raw) => api_fn(lua, move |lua, args| {
             profiling::scope!("Instance method", &format!("{owner}:{resolved}"));
             let (this, args) = Args::method(args, name)?;
+            own_class(lua, this, owner_class, name)?;
             if inert {
                 with_world(lua, |w| w.count_inert(format!("{owner}.{resolved}")));
             }
@@ -53,6 +55,7 @@ pub(super) fn method_function(
         })?,
         None => api_fn(lua, move |lua, args| {
             let (this, _) = Args::method(args, name)?;
+            own_class(lua, this, owner_class, name)?;
             let class = with_world(lua, |w| {
                 w.count_unimplemented(format!("{owner}.{name}"));
                 w.dom.class_name(this).to_owned()
@@ -75,6 +78,19 @@ pub(super) fn method_function(
     };
     c.methods.borrow_mut().insert(key, f.clone());
     Ok(f)
+}
+
+/// A member function called with an instance of another class as `self`
+/// raises as a call without one does (measured: `player.Kick(workspace)`
+/// and `player.GetJoinData(workspace)` are `Expected ':' not '.' calling
+/// member function ...`).
+fn own_class(lua: &Lua, this: InstanceId, owner: Option<ClassId>, name: &str) -> ApiResult<()> {
+    match owner {
+        Some(class) if !with_world(lua, |w| w.dom.is_a_class(this, class)) => Err(ScriptError(
+            format!("Expected ':' not '.' calling member function {name}"),
+        )),
+        _ => Ok(()),
+    }
 }
 
 /// A method with a fast form (see [`methods::instances::tree::fast`]): a Luau wrapper calls
