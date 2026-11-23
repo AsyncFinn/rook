@@ -5,6 +5,7 @@ Every release, newest first. How versions are numbered is in
 
 ## [Unreleased]
 
+- Light, shadows and the sky's light follow the camera to where it moves on a busy or slow machine. Rook could keep lighting only where the camera had been, for as long as the machine stayed busy. See [local lights](docs/behavior/lighting/local-lights.md).
 - AudioChannelMixer takes sound in through its channel pins, and AudioChannelSplitter's channel pins carry only their channel, as in Roblox. Rook left the mixer unwired, so everything sent through one was silent, and sent the whole sound out of every splitter pin. See [the audio API](docs/behavior/audio/audio-api.md).
 - A part's `CustomPhysicalProperties` reads nil until it's set and can be set back to nil, as in Roblox. Rook read an empty PhysicalProperties value for an unset one and raised an error for nil. See [Faces, Axes and PhysicalProperties](docs/behavior/scripting/faces-and-axes.md).
 - `AudioPlayer.AssetId` reads and writes the player's `Asset`, as in Roblox. Rook read it as empty, so scripts that look sounds up by it found none. See [the audio API](docs/behavior/audio/audio-api.md).
@@ -15,6 +16,8 @@ Every release, newest first. How versions are numbered is in
 - `Model:GetScale`, `Model:ScaleTo` and `WorldRoot:BulkMoveTo` work as in Roblox. Rook raised an error for them. See [model scale](docs/behavior/pivots.md#model-scale) and [BulkMoveTo](docs/behavior/pivots.md#bulkmoveto).
 - EncodingService's Base64 and zstd methods work as in Roblox, with its errors. Rook raised an error for them. See [encoding](docs/behavior/scripting/encoding.md).
 - A `buffer` sent through a RemoteEvent or RemoteFunction arrives as the receiver's own copy, and `Player:GetNetworkPing` reads a number. Rook delivered buffers as nil and raised an error for `GetNetworkPing`. See [remote arguments](docs/behavior/replication.md#remote-arguments).
+- `RaycastParams` and `OverlapParams` take `ExcludeInstances` and `IncludeInstances`, which narrow a query alongside its older filter as in Roblox. Rook raised an error for them. See [include and exclude lists](docs/behavior/physics/queries.md#include-and-exclude-lists).
+- A script that moves an assembly and changes one of its joints in the same frame keeps the move, as in Roblox. Rook put the assembly back where physics last held it on the next raycast or step, so rigs posed and moved every frame jumped back and lagged behind.
 - A script reading a GUI object's `AbsoluteSize`, `AbsolutePosition`, `TextBounds` or another laid-out property no longer stalls the game. The read laid out every GUI that had changed, and could lay out a GUI kept in storage again on every read; now it lays out only what changed in the object's own GUI, and nothing when nothing did.
 - Parts resting on terrain fall asleep and stay asleep while things move elsewhere on the map, as in Roblox. Rook woke every part resting on terrain whenever a moving part reached terrain it hadn't touched yet, so on large terrain maps they never slept and the server kept simulating them.
 - Roblox's CoreScripts and PlayerModule run again with Studio's latest packages. Rook refused to load scripts compiled by the newer Luau Roblox now uses, so the in-game GUI and the character's controls and camera scripts didn't start. See [CoreScripts](docs/behavior/gui/core-scripts.md).

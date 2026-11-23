@@ -195,6 +195,12 @@ impl Physics {
         self.cursor = dom.journal().end();
     }
 
+    /// Whether a move of `h` in the changes being applied is a server
+    /// update, which playback shows when its time comes rather than now.
+    pub(crate) fn receives(&self, h: RigidBodyHandle) -> bool {
+        self.playback.receiving.is_some() && self.bodies.get(&h).is_some_and(|b| b.remote)
+    }
+
     /// A replicated move of the server's assembly `h`: keep it to play
     /// back. Anything else moving it (a local script) puts it there at
     /// once, as on Roblox, until the next update.

@@ -65,6 +65,10 @@ pub(crate) struct Params {
     pub(crate) brute_force: bool,
     pub(crate) max_parts: i32,
     pub(crate) tolerance: f32,
+    /// `ExcludeInstances` (nil until set).
+    pub(crate) exclude: Option<Vec<InstanceId>>,
+    /// `IncludeInstances` (nil until set: everything).
+    pub(crate) include: Option<Vec<InstanceId>>,
 }
 
 impl Default for Params {
@@ -78,6 +82,8 @@ impl Default for Params {
             brute_force: false,
             max_parts: 0,
             tolerance: 0.0,
+            exclude: None,
+            include: None,
         }
     }
 }
@@ -92,6 +98,8 @@ impl Params {
             ignore_water: self.ignore_water,
             skip_invisible_ghosts: false,
             max_transparency: None,
+            exclude: self.exclude.iter().flatten().copied().collect(),
+            only: self.include.as_ref().map(|l| l.iter().copied().collect()),
         }
     }
 
@@ -150,6 +158,25 @@ impl<const OVERLAP: bool> LParams<OVERLAP> {
                     t.raw_set(i + 1, push_instance(lua, *id)?)?;
                 }
                 LuaValue::Table(t)
+            }
+            // Copies, as FilterDescendantsInstances; nil until set
+            // (measured in Studio 0.748).
+            "ExcludeInstances" | "IncludeInstances" => {
+                let list = if key == "ExcludeInstances" {
+                    &p.exclude
+                } else {
+                    &p.include
+                };
+                match list {
+                    None => LuaValue::Nil,
+                    Some(list) => {
+                        let t = lua.create_table()?;
+                        for (i, id) in list.iter().enumerate() {
+                            t.raw_set(i + 1, push_instance(lua, *id)?)?;
+                        }
+                        LuaValue::Table(t)
+                    }
+                }
             }
             "CollisionGroup" => LuaValue::String(lua.create_string(&p.collision_group)?),
             "RespectCanCollide" => LuaValue::Boolean(p.respect_can_collide),
@@ -221,6 +248,24 @@ impl<const OVERLAP: bool> LParams<OVERLAP> {
                     }
                     _ => return Err(ScriptError::from("Invalid value type; expected a string")),
                 };
+            }
+            // The table is copied: changing it afterwards changes nothing
+            // (measured in Studio 0.748).
+            "ExcludeInstances" | "IncludeInstances" => {
+                let list = match v {
+                    LuaValue::Nil => None,
+                    LuaValue::Table(_) => {
+                        let mut list = Vec::new();
+                        collect(v, &mut list, 0)?;
+                        Some(list)
+                    }
+                    _ => return Err(ScriptError::from("Invalid value type; expected a table")),
+                };
+                if key == "ExcludeInstances" {
+                    p.exclude = list;
+                } else {
+                    p.include = list;
+                }
             }
             "RespectCanCollide" => p.respect_can_collide = truthy,
             "BruteForceAllSlow" => p.brute_force = truthy,

@@ -473,9 +473,13 @@ fn a_moved_light_volume_fills_what_it_came_onto() {
         };
         moved.set_scene(&scene);
         moved.render_to_image(16, 16, &here).unwrap();
-        // The parts where it went are marked a little each frame first.
+        // The parts where it went are marked a little each frame first,
+        // as many frames as the machine's speed takes, up to a brick a
+        // frame; then it fills.
         let mut filled = Vec::new();
-        for _ in 0..30 {
+        while filled.last().is_none_or(|&f| f == 0)
+            && filled.len() < crate::lighting::local::GpuLights::most_frames_to_move()
+        {
             moved.render_to_image(16, 16, &there).unwrap();
             filled.push(moved.lights.filled_tiles());
         }

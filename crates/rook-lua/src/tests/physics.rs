@@ -114,3 +114,144 @@ fn weld_constraints_keep_their_offset() {
     let printed: Vec<String> = rt.take_log().into_iter().map(|e| e.message).collect();
     assert_eq!(printed, ["10, 0, 3"]);
 }
+
+/// `ExcludeInstances` and `IncludeInstances` with the legacy filter, as
+/// measured in Studio 0.748: every list narrows the candidates (the
+/// lists intersect, exclusion wins), descendants count, and an assigned
+/// table is copied.
+#[test]
+fn raycast_include_and_exclude_lists() {
+    expect(
+        r#"
+        local function wall(name, z, parent)
+            local p = Instance.new("Part")
+            p.Name = name
+            p.Anchored = true
+            p.Size = Vector3.new(10, 10, 1)
+            p.CFrame = CFrame.new(0, 50, z)
+            p.Parent = parent or workspace
+            return p
+        end
+        local A = wall("A", -10)
+        local B = wall("B", -20)
+        local F = Instance.new("Folder")
+        F.Parent = workspace
+        local C = wall("C", -30, F)
+        local function cast(p)
+            local r = workspace:Raycast(Vector3.new(0, 50, 0), Vector3.new(0, 0, -100), p)
+            return r and r.Instance.Name or "nil"
+        end
+        local p = RaycastParams.new()
+        print(p.ExcludeInstances, p.IncludeInstances)
+        p.FilterType = Enum.RaycastFilterType.Include
+        p.FilterDescendantsInstances = { A, B, F }
+        p.ExcludeInstances = { A }
+        print(cast(p))
+        local t = {}
+        p.ExcludeInstances = t
+        table.insert(t, A)
+        print(cast(p), rawequal(p.ExcludeInstances, t))
+        local q = RaycastParams.new()
+        q.ExcludeInstances = { A, B, F }
+        print(cast(q))
+        q.ExcludeInstances = { A, B }
+        print(cast(q))
+        local r = RaycastParams.new()
+        r.IncludeInstances = { B, F }
+        print(cast(r))
+        r.IncludeInstances = {}
+        print(cast(r))
+        r.IncludeInstances = { B, F }
+        r.ExcludeInstances = { B }
+        print(cast(r))
+        local s = RaycastParams.new()
+        s.FilterDescendantsInstances = { A }
+        s.IncludeInstances = { A, B }
+        print(cast(s))
+        local v = RaycastParams.new()
+        v.FilterType = Enum.RaycastFilterType.Include
+        v.FilterDescendantsInstances = { F }
+        v.IncludeInstances = { B }
+        print(cast(v))
+        r.ExcludeInstances = nil
+        print(r.ExcludeInstances, cast(r))
+        "#,
+        1,
+        &[
+            "nil nil", "B", "A false", "nil", "C", "B", "nil", "C", "B", "nil", "nil B",
+        ],
+    );
+}
+
+/// `OverlapParams` take the same lists: an overlap finds only what they
+/// leave in.
+#[test]
+fn overlap_include_and_exclude_lists() {
+    expect(
+        r#"
+        local function block(name, x)
+            local p = Instance.new("Part")
+            p.Name = name
+            p.Anchored = true
+            p.CFrame = CFrame.new(x, 50, 0)
+            p.Parent = workspace
+            return p
+        end
+        local a, b = block("A", 0), block("B", 3)
+        local function names(params)
+            local found = workspace:GetPartBoundsInBox(CFrame.new(1.5, 50, 0), Vector3.new(10, 10, 10), params)
+            local list = {}
+            for _, p in found do table.insert(list, p.Name) end
+            table.sort(list)
+            return table.concat(list, ",")
+        end
+        local o = OverlapParams.new()
+        print(o.ExcludeInstances, names(o))
+        o.ExcludeInstances = { a }
+        print(names(o))
+        o.ExcludeInstances = nil
+        o.IncludeInstances = { a }
+        print(names(o))
+        print(pcall(function() o.IncludeInstances = 5 end))
+        "#,
+        0,
+        &[
+            "nil A,B",
+            "B",
+            "A",
+            "false Invalid value type; expected a table",
+        ],
+    );
+}
+
+/// A script that poses a rig's joints and moves its root in one go (as a
+/// viewmodel each frame) keeps the move when physics next syncs: the joints
+/// are placed around the root's new CFrame, not the one physics held before.
+#[test]
+fn joint_change_and_move_in_one_batch_keep_the_move() {
+    expect(
+        r#"
+        local m = Instance.new("Model")
+        local root = Instance.new("Part")
+        root.Anchored = true
+        root.CFrame = CFrame.new(0, 10, 0)
+        root.Parent = m
+        local arm = Instance.new("Part")
+        arm.Parent = m
+        local motor = Instance.new("Motor6D")
+        motor.Part0, motor.Part1 = root, arm
+        motor.C0 = CFrame.new(1, 0, 0)
+        motor.Parent = root
+        m.Parent = workspace
+        task.wait()
+        for i = 1, 3 do
+            motor.C0 = CFrame.new(1, i, 0)
+            root.CFrame = CFrame.new(100 * i, 10, 0)
+            workspace:Raycast(Vector3.new(0, 1000, 0), Vector3.new(0, -1, 0))
+            print(root.Position.X, arm.Position.X, arm.Position.Y)
+        end
+        "#,
+        3,
+        &["100 101 11", "200 201 12", "300 301 13"],
+    );
+}

@@ -249,6 +249,15 @@ impl GpuLights {
         self.filled
     }
 
+    /// The most frames a moved volume takes to arrive: one brick of its
+    /// voxels marked a frame, on a machine too slow to mark more within
+    /// the budget.
+    #[cfg(test)]
+    pub(crate) fn most_frames_to_move() -> usize {
+        let across = |n: u32| n as usize / blockers::PIECE as usize;
+        across(VOLUME[0]) * across(VOLUME[2])
+    }
+
     /// Fill the voxels again where they changed: whole if the lights were
     /// hashed again, the volume's center drifted [`RECENTER`] from where
     /// the camera puts it, the sun the voxels shadow (`sun`, towards it)
