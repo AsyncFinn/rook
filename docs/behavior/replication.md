@@ -143,3 +143,12 @@ clients: the moves of a player's own character, which its client
 simulates (network ownership; see
 [who simulates a character](physics/ownership.md)), and the Tools it
 equips. Remote events and ClickDetector clicks also reach the server.
+
+## Remote arguments
+
+- A `buffer` passes through RemoteEvents and RemoteFunctions as the
+  receiver's own copy, nested in tables too (creator-docs "Remote events
+  and callbacks" lists buffers among the values that pass).
+- `Player:GetNetworkPing` reads 0. Approximation: a Rook session's server
+  and clients share one process, and messages cross within a step (Studio's
+  Play Solo read 0.124 s on 2026-11-22).

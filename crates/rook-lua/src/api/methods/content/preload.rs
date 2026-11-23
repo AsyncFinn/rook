@@ -16,7 +16,7 @@ use rook_reflection::{PropertyType, database};
 
 use super::RawMethod;
 use crate::api::properties::content_view;
-use crate::runtime::ctx::args::{Args, type_name};
+use crate::runtime::ctx::args::{Args, cast_name, type_name};
 use crate::runtime::ctx::{ApiResult, Outcome, ScriptError, with_world};
 use crate::runtime::world::World;
 
@@ -58,15 +58,6 @@ pub(crate) fn native(owner: &str, name: &str) -> Option<RawMethod> {
         ("ContentProvider", "PreloadAsync") => preload_async,
         _ => return None,
     })
-}
-
-/// A Lua value's type as Roblox's cast errors name it.
-fn cast_name(v: &LuaValue) -> String {
-    match v {
-        LuaValue::Integer(_) | LuaValue::Number(_) => "double".into(),
-        LuaValue::Boolean(_) => "bool".into(),
-        v => type_name(v),
-    }
 }
 
 /// What a content property must load as (`Want::for_property`).
