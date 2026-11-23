@@ -33,6 +33,25 @@ pub fn pins(class: &str) -> Option<(&'static [&'static str], &'static [&'static 
         "AudioPlayer" | "AudioListener" => (NONE, OUT),
         "AudioEmitter" | "AudioDeviceOutput" | "AudioAnalyzer" => (IN, NONE),
         "AudioCompressor" => (&["Input", "Sidechain"], OUT),
+        // Measured in Studio 0.748 (GetInputPins / GetOutputPins).
+        "AudioChannelMixer" => (
+            &[
+                "BackLeft",
+                "BackRight",
+                "Center",
+                "Input",
+                "Left",
+                "Right",
+                "Sub",
+                "SurroundLeft",
+                "SurroundRight",
+                "TopBackLeft",
+                "TopBackRight",
+                "TopLeft",
+                "TopRight",
+            ],
+            OUT,
+        ),
         "AudioChannelSplitter" => (
             IN,
             &[
@@ -161,6 +180,10 @@ pub struct Connection {
     pub to: InstanceId,
     /// The target pin is a compressor's **Sidechain**.
     pub sidechain: bool,
+    /// The source pin is one of a splitter's channels.
+    pub from_channel: Option<rook_audio::graph::Channel>,
+    /// The target pin is one of a mixer's channels.
+    pub to_channel: Option<rook_audio::graph::Channel>,
 }
 
 fn in_tree(dom: &Dom, id: InstanceId) -> bool {
@@ -188,6 +211,8 @@ fn ends(dom: &Dom, wire: InstanceId) -> Option<Connection> {
         from,
         to,
         sidechain: target == "Sidechain",
+        from_channel: rook_audio::graph::Channel::of_pin(&source),
+        to_channel: rook_audio::graph::Channel::of_pin(&target),
     })
 }
 

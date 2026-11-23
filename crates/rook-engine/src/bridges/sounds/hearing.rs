@@ -400,6 +400,8 @@ impl Hearing {
                 from: c.from,
                 to: c.to,
                 sidechain: c.sidechain,
+                from_channel: c.from_channel,
+                to_channel: c.to_channel,
             })
             .collect();
         self.mix.graph = Graph {

@@ -5,6 +5,7 @@ Every release, newest first. How versions are numbered is in
 
 ## [Unreleased]
 
+- AudioChannelMixer takes sound in through its channel pins, and AudioChannelSplitter's channel pins carry only their channel, as in Roblox. Rook left the mixer unwired, so everything sent through one was silent, and sent the whole sound out of every splitter pin. See [the audio API](docs/behavior/audio/audio-api.md).
 - A part's `CustomPhysicalProperties` reads nil until it's set and can be set back to nil, as in Roblox. Rook read an empty PhysicalProperties value for an unset one and raised an error for nil. See [Faces, Axes and PhysicalProperties](docs/behavior/scripting/faces-and-axes.md).
 - `AudioPlayer.AssetId` reads and writes the player's `Asset`, as in Roblox. Rook read it as empty, so scripts that look sounds up by it found none. See [the audio API](docs/behavior/audio/audio-api.md).
 - Places that turn Roblox's camera off and move the camera with their own scripts are shown from their camera, as in Roblox. Rook flew its own free camera in them, once the script that turned Roblox's camera off had removed itself. See [the default camera and controls](docs/behavior/characters/camera.md#in-rook).
