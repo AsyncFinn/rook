@@ -448,14 +448,15 @@ local function slider(title, get, set, typed)
 		end
 	end
 	local function choose(at)
-		set(math.clamp(at, 0, 10))
+		at = math.clamp(at, 0, 10)
+		if at ~= get() then
+			set(at)
+		end
 		show()
 	end
 	for i = 1, 10 do
-		local block = new("TextButton", {
+		local block = new("Frame", {
 			Name = "Step" .. i,
-			Text = "",
-			AutoButtonColor = false,
 			BorderSizePixel = 0,
 			AnchorPoint = Vector2.new(0.5, 0.5),
 			Position = UDim2.new((i - 0.5) / 10, 0, 0.5, 0),
@@ -473,11 +474,43 @@ local function slider(title, get, set, typed)
 				Parent = block,
 			})
 		end
-		block.Activated:Connect(function()
-			choose(i)
-		end)
 		blocks[i] = block
 	end
+	-- Pressing anywhere on the steps sets the value where the cursor is,
+	-- and it follows the cursor until the button comes up, wherever the
+	-- cursor goes; left of the first step is 0.
+	local drag = new("TextButton", {
+		Name = "Drag",
+		Text = "",
+		AutoButtonColor = false,
+		BackgroundTransparency = 1,
+		Size = UDim2.fromScale(1, 1),
+		ZIndex = 2,
+		Parent = steps,
+	})
+	local function follow(x)
+		local width = steps.AbsoluteSize.X
+		if width > 0 then
+			choose(math.ceil((x - steps.AbsolutePosition.X) / width * 10))
+		end
+	end
+	local dragging = false
+	drag.InputBegan:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 then
+			dragging = true
+			follow(input.Position.X)
+		end
+	end)
+	UserInputService.InputChanged:Connect(function(input)
+		if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+			follow(input.Position.X)
+		end
+	end)
+	UserInputService.InputEnded:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 then
+			dragging = false
+		end
+	end)
 	for _, side in { { "Less", -1 }, { "More", 1 } } do
 		local button = new("TextButton", {
 			Name = side[1],

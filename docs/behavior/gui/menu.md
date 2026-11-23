@@ -60,8 +60,10 @@ Sizes and colors are Roblox's, read from its menu in a Studio client
   Rook's doesn't, and the slider then shows all ten steps.
 - A slider is ten steps, 24 tall, light (217, 217, 217) up to the value
   and dark (57, 59, 61) after, round at the ends, between circled minus
-  and plus buttons 32 wide. A step sets the value; minus and plus move
-  one step.
+  and plus buttons 32 wide. Pressing on the steps sets the value under
+  the cursor, and it follows the cursor while the button is held,
+  anywhere on the screen; left of the first step is 0. Minus and plus
+  move one step.
 - The buttons along the bottom are 48 tall, 8 apart, 20 from the panel's
   bottom: Leave and Respawn (207, 217, 250) at 0.88, Resume (51, 95, 255)
   at 0.6, each with its key in an outlined box before its name. Roblox

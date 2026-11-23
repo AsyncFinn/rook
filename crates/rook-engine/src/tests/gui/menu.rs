@@ -214,3 +214,54 @@ fn any_sensitivity_can_be_typed() {
         .unwrap();
     assert!((v.x() - 3.6).abs() < 1e-5, "{}", v.x());
 }
+
+/// The volume slider follows a drag, past its ends too, and a press on a
+/// step sets it.
+#[test]
+fn sliders_follow_a_drag() {
+    let (mut session, index) = menu_session();
+    press(&mut session, index, "Escape");
+    let volume = |session: &Session| {
+        let client = session.client(index).unwrap();
+        let w = client.runtime.world();
+        let game = w
+            .dom
+            .find_first_child(w.user_settings.unwrap(), "GameSettings", false)
+            .unwrap();
+        (w.dom.float_property(game, "MasterVolume").unwrap() * 10.0).round()
+    };
+    // The Volume row's steps, 36.6 apart from x 826 (step i's middle is
+    // 826 + (i - 0.5) * 36.6), at y 334.
+    let step = |i: f32| 826.0 + (i - 0.5) * 36.6;
+    let to = |session: &mut Session, x: f32, y: f32| {
+        session.input(index, InputEvent::MouseMove { x, y });
+        session.run_for(0.05);
+    };
+    to(&mut session, step(2.0), 334.0);
+    session.input(
+        index,
+        InputEvent::MouseButton {
+            button: 1,
+            down: true,
+        },
+    );
+    session.run_for(0.05);
+    assert_eq!(volume(&session), 2.0);
+    // Off the row while held.
+    to(&mut session, step(8.0), 500.0);
+    assert_eq!(volume(&session), 8.0);
+    to(&mut session, 600.0, 334.0);
+    assert_eq!(volume(&session), 0.0);
+    session.input(
+        index,
+        InputEvent::MouseButton {
+            button: 1,
+            down: false,
+        },
+    );
+    session.run_for(0.05);
+    to(&mut session, step(5.0), 334.0);
+    assert_eq!(volume(&session), 0.0);
+    click(&mut session, index, step(6.0), 334.0);
+    assert_eq!(volume(&session), 6.0);
+}
