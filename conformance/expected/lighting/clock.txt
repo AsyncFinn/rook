@@ -1,0 +1,89 @@
+-- studio 0.748.0.7481526
+-- signals: deferred
+GetMinutesAfterMidnight number
+lat 0.000 t 0.000 sun 0.000,-0.917,-0.399 moon 0.000,0.917,-0.399 min 0.000
+lat 0.000 t 3.000 sun 0.648,-0.648,-0.399 moon -0.648,0.648,-0.399 min 180.000
+lat 0.000 t 6.000 sun 0.917,0.000,-0.399 moon -0.917,0.000,-0.399 min 360.000
+lat 0.000 t 9.000 sun 0.648,0.648,-0.399 moon -0.648,-0.648,-0.399 min 540.000
+lat 0.000 t 12.000 sun 0.000,0.917,-0.399 moon 0.000,-0.917,-0.399 min 720.000
+lat 0.000 t 14.000 sun -0.459,0.794,-0.399 moon 0.459,-0.794,-0.399 min 840.000
+lat 0.000 t 18.000 sun -0.917,0.000,-0.399 moon 0.917,0.000,-0.399 min 1080.000
+lat 0.000 t 21.500 sun -0.558,-0.728,-0.399 moon 0.558,0.728,-0.399 min 1290.000
+lat 41.733 t 0.000 sun 0.000,-0.950,0.313 moon 0.000,0.950,0.313 min 0.000
+lat 41.733 t 3.000 sun 0.672,-0.672,0.313 moon -0.672,0.672,0.313 min 180.000
+lat 41.733 t 6.000 sun 0.950,0.000,0.313 moon -0.950,0.000,0.313 min 360.000
+lat 41.733 t 9.000 sun 0.672,0.672,0.313 moon -0.672,-0.672,0.313 min 540.000
+lat 41.733 t 12.000 sun 0.000,0.950,0.313 moon 0.000,-0.950,0.313 min 720.000
+lat 41.733 t 14.000 sun -0.475,0.823,0.313 moon 0.475,-0.823,0.313 min 840.000
+lat 41.733 t 18.000 sun -0.950,0.000,0.313 moon 0.950,0.000,0.313 min 1080.000
+lat 41.733 t 21.500 sun -0.578,-0.754,0.313 moon 0.578,0.754,0.313 min 1290.000
+lat -30.000 t 0.000 sun 0.000,-0.595,-0.804 moon 0.000,0.595,-0.804 min 0.000
+lat -30.000 t 3.000 sun 0.421,-0.421,-0.804 moon -0.421,0.421,-0.804 min 180.000
+lat -30.000 t 6.000 sun 0.595,0.000,-0.804 moon -0.595,0.000,-0.804 min 360.000
+lat -30.000 t 9.000 sun 0.421,0.421,-0.804 moon -0.421,-0.421,-0.804 min 540.000
+lat -30.000 t 12.000 sun 0.000,0.595,-0.804 moon 0.000,-0.595,-0.804 min 720.000
+lat -30.000 t 14.000 sun -0.297,0.515,-0.804 moon 0.297,-0.515,-0.804 min 840.000
+lat -30.000 t 18.000 sun -0.595,0.000,-0.804 moon 0.595,0.000,-0.804 min 1080.000
+lat -30.000 t 21.500 sun -0.362,-0.472,-0.804 moon 0.362,0.472,-0.804 min 1290.000
+lat 23.500 t 14 read 23.500 sun -0.500,0.866,0.000 moon 0.500,-0.866,0.000
+lat 90.000 t 14 read 90.000 sun -0.199,0.345,0.917 moon 0.199,-0.345,0.917
+lat -90.000 t 14 read -90.000 sun 0.199,-0.345,-0.917 moon -0.199,0.345,-0.917
+lat 120.000 t 14 read 120.000 sun 0.057,-0.098,0.994 moon -0.057,0.098,0.994
+lat 200.000 t 14 read 200.000 sun 0.499,-0.864,0.061 moon -0.499,0.864,0.061
+lat -400.000 t 14 read -400.000 sun -0.223,0.386,-0.895 moon 0.223,-0.386,-0.895
+lat 1000000000.000 read 1000000000.000 sun -0.498,0.863,0.084
+lat nan read nan sun nan,nan,nan
+lat inf read inf sun nan,nan,nan
+GetMoonPhase 0.000 ok 0.750
+GetMoonPhase 12.000 ok 0.750
+ClockTime 0.0000 ok 0.0000 00:00:00 0.00
+ClockTime 13.9990 ok 13.9989 13:59:56 839.93
+ClockTime 14.5000 ok 14.5000 14:30:00 870.00
+ClockTime 23.9999 ok 23.9997 23:59:59 1439.98
+ClockTime 24.0000 ok 0.0000 00:00:00 0.00
+ClockTime 25.5000 ok 0.0000 00:00:00 0.00
+ClockTime 48.2500 ok 0.0000 00:00:00 0.00
+ClockTime -1.0000 ok 0.0000 00:00:00 0.00
+ClockTime -0.2500 ok 0.0000 00:00:00 0.00
+ClockTime 1000000000.0000 ok 0.0000 00:00:00 0.00
+ClockTime 0.0000 ok 0.0000 00:00:00 0.00
+ClockTime nan ok 20.7644 20:45:52 1245.87
+ClockTime inf ok 0.0000 00:00:00 0.00
+ClockTime -inf ok 0.0000 00:00:00 0.00
+ClockTime string ok 7.5000 07:30:00
+ClockTime bad string ok 0.0000
+TimeOfDay "06:30:00" ok 06:30:00 6.5000
+TimeOfDay "6:30" ok 06:30:00 6.5000
+TimeOfDay "7" ok 07:00:00 7.0000
+TimeOfDay "12:30:45.5" ok 12:30:45 12.5125
+TimeOfDay "12:30:45.6" ok 12:30:45 12.5125
+TimeOfDay "25:00:00" ok 01:00:00 1.0000
+TimeOfDay "24:00:00" ok 00:00:00 0.0000
+TimeOfDay "-1:00:00" ok 23:00:00 23.0000
+TimeOfDay "12:61:00" ok 13:01:00 13.0167
+TimeOfDay "12:00:75" ok 12:01:15 12.0208
+TimeOfDay "1:2:3:4" ok 01:02:03 1.0342
+TimeOfDay " 08:00:00 " bad lexical cast: source type value could not be interpreted as target 14:00:00 14.0000
+TimeOfDay "08:00:00am" bad lexical cast: source type value could not be interpreted as target 14:00:00 14.0000
+TimeOfDay "8h" bad lexical cast: source type value could not be interpreted as target 14:00:00 14.0000
+TimeOfDay "abc" bad lexical cast: source type value could not be interpreted as target 14:00:00 14.0000
+TimeOfDay "" invalid string position 14:00:00 14.0000
+TimeOfDay "99999:00:00" ok 15:00:00 15.0000
+TimeOfDay number ok 09:00:00 9.0000
+SetMinutesAfterMidnight 90.00 ok 01:30:00 1.5000 90.00
+SetMinutesAfterMidnight 0.50 ok 00:00:30 0.0083 0.50
+SetMinutesAfterMidnight 1439.99 ok 23:59:59 23.9997 1439.98
+SetMinutesAfterMidnight 1440.00 ok 00:00:00 0.0000 0.00
+SetMinutesAfterMidnight 1500.00 ok 01:00:00 1.0000 60.00
+SetMinutesAfterMidnight -30.00 ok 23:30:00 23.5000 1410.00
+SetMinutesAfterMidnight 10000000.00 ok 10:40:00 10.6667 640.00
+SetMinutesAfterMidnight nan ok 20:45:52 20.7644 1245.87
+SetMinutesAfterMidnight string ok 01:00:00
+SetMinutesAfterMidnight nil error Argument 1 missing or nil
+changed ClockTime ClockTime,TimeOfDay | ClockTime,TimeOfDay
+changed TimeOfDay ClockTime,TimeOfDay | ClockTime,TimeOfDay
+changed SetMinutesAfterMidnight ClockTime,TimeOfDay | ClockTime,TimeOfDay
+changed same ClockTime  | 
+changed TimeOfDay under a second  | 
+changed ClockTime under a second  | 
+restored true true

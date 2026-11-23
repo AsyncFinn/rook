@@ -5,6 +5,7 @@ Every release, newest first. How versions are numbered is in
 
 ## [Unreleased]
 
+- `Lighting:GetSunDirection`, `GetMoonDirection` and `GetMoonPhase` work, and `ClockTime`, `TimeOfDay` and `SetMinutesAfterMidnight` take odd values and report their changes as in Roblox. Rook raised an error for the three methods and kept the time its own way, so odd values read back differently and only `TimeOfDay` reported a change. See [the clock](docs/behavior/lighting/clock.md).
 - A member's argument that doesn't cast names a table as `Array` or `Dictionary` in its error, and an EnumItem as its enum, as in Roblox. Rook named either by its type in some members' errors.
 - A member function called with an instance of another class in place of `self` raises `Expected ':' not '.'`, as in Roblox. Rook ran the member on whatever instance it was given. See [member lookup](docs/behavior/scripting/member-lookup.md#calling-a-member-function).
 - An integer property set to NaN or a number past what it holds reads as the lowest integer, and assigning a reference property something that isn't an Instance says an Instance was expected, as in Roblox. Rook kept such numbers just inside the range and read NaN as 0, and said an Object was expected.

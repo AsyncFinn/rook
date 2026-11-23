@@ -10,6 +10,7 @@ use crate::api::methods::characters::spawning;
 use crate::types::color::closest_brick_color;
 
 mod attachment;
+mod clock;
 mod grip;
 mod mouse;
 mod part;
@@ -19,13 +20,14 @@ mod text;
 mod views;
 
 use crate::runtime::world::World;
+pub(crate) use clock::{changes_with, set_clock};
 pub(crate) use mouse::copy_icon;
 pub(crate) use part::{cframe, part_cframe, part_ids, set_cframe};
 use part::{orientation, rotation, saved_fidelity, set_cframe_alone};
 use sound::set_sound;
 use views::{BRICK_COLOR_OF, SAME_AS, is_text_object, view};
 pub(crate) use views::{
-    changed_name, content_target, content_value, content_view, stored_property, wrong_ref_class,
+    changed_name, content_target, content_value, content_view, stored_property,
 };
 
 pub(super) fn set_named(
@@ -37,17 +39,15 @@ pub(super) fn set_named(
     w.dom.set_property_by_name(id, name, value)
 }
 
-pub(crate) fn set_lighting_hours(
-    w: &mut World,
-    id: InstanceId,
-    hours: f64,
-) -> Result<(), DomError> {
-    set_named(
-        w,
-        id,
-        "TimeOfDay",
-        Value::String(rook_types::time_of_day(hours)),
-    )
+/// Studio's error for a value the property refuses, which leaves it as it
+/// was.
+pub(crate) fn rejected(w: &World, id: InstanceId, name: &str, value: &Value) -> Option<String> {
+    if w.dom.is_a(id, "Lighting")
+        && let Some(e) = clock::rejected(name, value)
+    {
+        return Some(e);
+    }
+    views::wrong_ref_class(w, id, name, value)
 }
 
 #[expect(
@@ -69,6 +69,11 @@ pub(crate) fn get(w: &World, id: InstanceId, name: &str) -> Option<Value> {
     if let Some(target) = view(w, id, name, SAME_AS) {
         return dom.property_by_name(id, target);
     }
+    if dom.is_a(id, "Lighting")
+        && let Some(v) = clock::get(w, id, name)
+    {
+        return Some(v);
+    }
     if is_text_object(w, id)
         && let Some(v) = text::get(w, id, name)
     {
@@ -81,7 +86,6 @@ pub(crate) fn get(w: &World, id: InstanceId, name: &str) -> Option<Value> {
         };
     }
     match name {
-        "ClockTime" if dom.is_a(id, "Lighting") => Some(Value::Float32(dom.clock_time(id) as f32)),
         // The top bar's free space, between Roblox's buttons (creator-docs
         // GuiService.TopbarInset). Approximation: all of it; a server has
         // none.
@@ -237,6 +241,11 @@ pub(crate) fn set(
     {
         return Some(done);
     }
+    if w.dom.is_a(id, "Lighting")
+        && let Some(done) = clock::set(w, id, name, value)
+    {
+        return Some(done);
+    }
     if let Some(target) = view(w, id, name, SAME_AS) {
         return Some(set_named(w, id, target, value.clone()));
     }
@@ -267,9 +276,6 @@ pub(crate) fn set(
                 "Volume",
                 Value::Float32(v.clamp(0.0, 10.0) as f32),
             ))
-        }
-        ("ClockTime", Value::Float32(h)) if w.dom.is_a(id, "Lighting") => {
-            Some(set_lighting_hours(w, id, f64::from(*h)))
         }
         // Measured: true sets ScreenInsets to DeviceSafeInsets, false to
         // CoreUISafeInsets.
