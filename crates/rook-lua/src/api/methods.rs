@@ -27,6 +27,7 @@ mod effects;
 pub(crate) mod gui;
 mod input;
 pub(crate) mod instances;
+mod lighting;
 pub(crate) mod localization;
 mod materials;
 pub(crate) mod physics;
@@ -76,6 +77,7 @@ pub(crate) fn native(owner: &str, name: &str) -> Option<RawMethod> {
             audio::native,
             effects::native,
             materials::native,
+            lighting::native,
             terrain::native,
             input::native,
             player_scripts::native,
