@@ -67,13 +67,14 @@ local function logo(size, hole)
 		Position = UDim2.fromScale(0.5, 0.5),
 		Rotation = 10,
 	})
-	-- In the SVG's units, its 320-unit square from (116, 96).
+	-- In the SVG's units, its 320-unit square from (96, 96), centered on the
+	-- rook (256, 256).
 	local function piece(name, x, y, w, h, color)
 		new("Frame", {
 			Name = name,
 			BorderSizePixel = 0,
 			BackgroundColor3 = color or WHITE,
-			Position = UDim2.fromScale((x - 116) / 320, (y - 96) / 320),
+			Position = UDim2.fromScale((x - 96) / 320, (y - 96) / 320),
 			Size = UDim2.fromScale(w / 320, h / 320),
 			Parent = box,
 		}, { corner(UDim.new(0.04, 0)) })
