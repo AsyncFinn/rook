@@ -14,8 +14,8 @@ use crate::runtime::ctx::{ApiResult, Outcome, ScriptError, api_fn};
 
 pub(super) fn native(owner: &str, name: &str) -> Option<RawMethod> {
     Some(match (owner, name) {
-        ("HttpService", "JSONEncode") => json_encode,
-        ("HttpService", "JSONDecode") => json_decode,
+        ("HttpService", "JSONEncode") => super::json::encode,
+        ("HttpService", "JSONDecode") => super::json::decode,
         ("HttpService", "GenerateGUID") => generate_guid,
         ("HttpService", "UrlEncode") => url_encode,
         ("HttpService", "GetAsync" | "PostAsync" | "RequestAsync") => http_disabled,
@@ -207,95 +207,11 @@ fn response(lua: &Lua, answer: WebAnswer) -> mlua::Result<MultiValue> {
     (true, t).into_lua_multi(lua)
 }
 
-fn to_json(v: &LuaValue, depth: usize) -> ApiResult<serde_json::Value> {
-    use serde_json::Value as J;
-    if depth > 100 {
-        return Err(ScriptError("Can't convert to JSON".into()));
-    }
-    Ok(match v {
-        LuaValue::Boolean(b) => J::Bool(*b),
-        LuaValue::Integer(_) | LuaValue::Number(_) => {
-            let n = crate::runtime::ctx::args::number_of(v).unwrap_or(0.0);
-            if n.fract() == 0.0 && n.abs() < 9.0e15 {
-                J::Number((n as i64).into())
-            } else {
-                serde_json::Number::from_f64(n).map_or(J::Null, J::Number)
-            }
-        }
-        LuaValue::String(s) => J::String(s.to_string_lossy()),
-        LuaValue::Table(t) => {
-            // Measured in Studio 0.748: a table with a length (`#t`) is an
-            // array of 1 to that length, nil as null and other keys
-            // dropped; an empty one is `[]`; the rest are objects.
-            let len = t.raw_len();
-            if len > 0 || t.is_empty() {
-                let mut out = Vec::with_capacity(len);
-                for i in 1..=len {
-                    out.push(to_json(&t.raw_get::<LuaValue>(i)?, depth + 1)?);
-                }
-                J::Array(out)
-            } else {
-                let mut out = serde_json::Map::new();
-                for pair in t.clone().pairs::<LuaValue, LuaValue>() {
-                    let (k, v) = pair?;
-                    let key = match &k {
-                        LuaValue::String(s) => s.to_string_lossy(),
-                        LuaValue::Integer(_) | LuaValue::Number(_) => {
-                            crate::runtime::ctx::args::format_number(
-                                crate::runtime::ctx::args::number_of(&k).unwrap_or(0.0),
-                            )
-                        }
-                        _ => return Err(ScriptError("Can't convert to JSON".into())),
-                    };
-                    out.insert(key, to_json(&v, depth + 1)?);
-                }
-                J::Object(out)
-            }
-        }
-        _ => J::Null,
-    })
-}
-
-fn from_json(lua: &Lua, v: &serde_json::Value) -> mlua::Result<LuaValue> {
-    use serde_json::Value as J;
-    Ok(match v {
-        J::Null => LuaValue::Nil,
-        J::Bool(b) => LuaValue::Boolean(*b),
-        J::Number(n) => LuaValue::Number(n.as_f64().unwrap_or(0.0)),
-        J::String(s) => LuaValue::String(lua.create_string(s)?),
-        J::Array(a) => {
-            let t = lua.create_table_with_capacity(a.len(), 0)?;
-            for (i, x) in a.iter().enumerate() {
-                t.raw_set(i + 1, from_json(lua, x)?)?;
-            }
-            LuaValue::Table(t)
-        }
-        J::Object(o) => {
-            let t = lua.create_table_with_capacity(0, o.len())?;
-            for (k, x) in o {
-                t.raw_set(k.as_str(), from_json(lua, x)?)?;
-            }
-            LuaValue::Table(t)
-        }
-    })
-}
-
-fn json_encode(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<Outcome> {
-    let json = to_json(a.get(0), 0)?;
-    Outcome::ret(lua, json.to_string())
-}
-
-fn json_decode(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<Outcome> {
-    let text = a.string(0)?;
-    let json: serde_json::Value =
-        serde_json::from_str(&text).map_err(|_| ScriptError("Can't parse JSON".into()))?;
-    Outcome::ret(lua, from_json(lua, &json)?)
-}
-
-/// A random version 4 UUID, uppercase, in braces unless asked otherwise
-/// (creator-docs HttpService:GenerateGUID).
+/// A random version 4 UUID in lowercase hex, in braces unless asked
+/// otherwise (measured in Studio 0.748, which casts the argument to a
+/// boolean: `GenerateGUID("x")` raises `Unable to cast string to bool`).
 fn generate_guid(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<Outcome> {
-    let braces = !matches!(a.get(0), LuaValue::Boolean(false));
+    let braces = a.bool_or(0, true)?;
     let math: Table = lua.globals().get("math")?;
     let random: mlua::Function = math.get("random")?;
     let mut bytes = [0u8; 16];
@@ -304,7 +220,7 @@ fn generate_guid(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<Outcome> {
     }
     bytes[6] = (bytes[6] & 0x0f) | 0x40;
     bytes[8] = (bytes[8] & 0x3f) | 0x80;
-    let hex: String = bytes.iter().map(|b| format!("{b:02X}")).collect();
+    let hex: String = bytes.iter().map(|b| format!("{b:02x}")).collect();
     let guid = format!(
         "{}-{}-{}-{}-{}",
         &hex[0..8],
@@ -316,11 +232,13 @@ fn generate_guid(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<Outcome> {
     Outcome::ret(lua, if braces { format!("{{{guid}}}") } else { guid })
 }
 
+/// Measured in Studio 0.748: only ASCII letters and digits are kept,
+/// `-`, `_`, `.` and `~` escaped too.
 fn url_encode(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<Outcome> {
     let text = a.string(0)?;
     let mut out = String::new();
     for b in text.bytes() {
-        if b.is_ascii_alphanumeric() || matches!(b, b'-' | b'_' | b'.' | b'~') {
+        if b.is_ascii_alphanumeric() {
             out.push(b as char);
         } else {
             out.push_str(&format!("%{b:02X}"));
