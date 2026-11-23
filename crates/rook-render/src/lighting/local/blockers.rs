@@ -39,7 +39,7 @@ const BUDGET: Duration = Duration::from_millis(1);
 const REACH: f32 = (1u32 << 30) as f32 * VOXEL;
 /// The pieces those voxels are marked in, across x and z (the volume's
 /// full height each), in voxels.
-const PIECE: i32 = 16;
+pub(super) const PIECE: i32 = 16;
 
 #[derive(Debug, Default)]
 pub(super) struct Blockers {

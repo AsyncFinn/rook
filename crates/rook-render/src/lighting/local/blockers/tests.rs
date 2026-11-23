@@ -77,6 +77,26 @@ fn a_moved_grid_matches_one_marked_where_it_went() {
     }
 }
 
+/// A frame whose budget is gone before any worker starts still marks a
+/// brick, so a moved volume always arrives, one brick a frame at worst,
+/// however slow the machine.
+#[test]
+fn a_spent_budget_still_marks_a_brick_each_frame() {
+    let list = scattered();
+    let columns = indexed(&list);
+    let dims = IVec3::new(64, 32, 64);
+    let mut grid = Grid::new(IVec3::new(-40, -10, -30), dims, of(&list, &columns));
+    let low = IVec3::new(100, 3, 90);
+    grid.move_to(low);
+    let mut frames = 0;
+    while !grid.work(Duration::ZERO, of(&list, &columns)) {
+        frames += 1;
+        assert!(frames < grid.bricks(), "no brick marked in a frame");
+    }
+    let fresh = Grid::new(low, dims, of(&list, &columns));
+    assert!(grid.counts == fresh.counts && grid.bits == fresh.bits);
+}
+
 /// The blocked layers of each column, read off the bits.
 fn layers_of(grid: &Grid) -> Vec<u64> {
     let mut layers = vec![0; (grid.dims.x * grid.dims.z) as usize];

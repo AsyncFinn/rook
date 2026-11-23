@@ -1,6 +1,8 @@
 //! The marked voxels, kept anchored to the world as the volume moves, and
 //! the work of marking them a budget at a time on the host's workers.
 
+use std::sync::atomic::{AtomicBool, Ordering};
+
 use super::*;
 
 /// The marked voxels of a volume, anchored to the world: voxel `k`
@@ -108,12 +110,15 @@ impl Grid {
     /// Each piece lies in one brick, and each brick's pieces are marked in
     /// it at once on the host's workers, as engines voxelize their
     /// clipmaps' new bricks as parallel jobs; those not started by then
-    /// wait.
+    /// wait. The first brick always goes, as time-sliced work always
+    /// makes progress: a worker that wakes after the deadline would
+    /// otherwise leave the volume where it was frame after frame.
     pub(super) fn work(&mut self, budget: Duration, from: Sources<'_>) -> bool {
         if self.pending.is_empty() {
             return true;
         }
         let deadline = Instant::now().checked_add(budget);
+        let started = AtomicBool::new(false);
         let mut by_brick = vec![Vec::new(); self.bricks()];
         for span in std::mem::take(&mut self.pending) {
             by_brick[self.brick_of(span)].push(span);
@@ -123,7 +128,8 @@ impl Grid {
         workers.for_each_chunk(&mut jobs, 1, |_, job| {
             let mut scratch = Scratch::default();
             for (voxels, spans, done) in job {
-                if deadline.is_none_or(|d| Instant::now() < d) {
+                let on_time = deadline.is_none_or(|d| Instant::now() < d);
+                if !started.swap(true, Ordering::Relaxed) || on_time {
                     for &span in spans.iter() {
                         voxels.clear(span);
                         voxels.take(span, from, &mut scratch);
