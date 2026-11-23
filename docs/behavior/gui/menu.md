@@ -38,7 +38,10 @@ Sizes and colors are Roblox's, read from its menu in a Studio client
   BackgroundTransparency 0.02, with a 24-pixel logo in it: Roblox's menu
   button is the same, with its own logo. It stays bright over the open
   menu, and lightens while hovered.
-- The screen darkens (black at 0.5), and the panel is 840 by 734, black
+- The screen darkens (black at 0.5) under a button covering it, as
+  Roblox's `SettingsShield` is an ImageButton: the topmost button under
+  the cursor takes a click whatever covers it ([input](input.md#buttons)),
+  so the game's buttons behind the menu get none. The panel is 840 by 734, black
   at 0.06, round by 10, centered; in a smaller window it keeps 20 pixels
   from each edge and the page scrolls.
 - The tab bar is 60 tall, 20 in from the panel's sides, over a white

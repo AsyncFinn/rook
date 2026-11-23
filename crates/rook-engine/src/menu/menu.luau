@@ -171,10 +171,14 @@ local menuButtonHover = new("Frame", {
 	Parent = menuButton,
 }, { corner(UDim.new(1, 0)) })
 
--- The menu: the darkened screen, and the panel on it.
-local shield = new("Frame", {
+-- The menu: the darkened screen, and the panel on it. The screen is a
+-- button, as Roblox's `SettingsShield` is: the topmost button under the
+-- cursor takes a click whatever covers it, so a Frame would let the
+-- game's buttons behind the menu be clicked (docs/behavior/gui/input.md).
+local shield = new("ImageButton", {
 	Name = "Shield",
-	Active = true,
+	AutoButtonColor = false,
+	Image = "",
 	Visible = false,
 	BackgroundColor3 = BLACK,
 	BackgroundTransparency = 0.5,

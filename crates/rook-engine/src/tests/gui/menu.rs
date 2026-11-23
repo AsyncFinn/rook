@@ -265,3 +265,34 @@ fn sliders_follow_a_drag() {
     click(&mut session, index, step(6.0), 334.0);
     assert_eq!(volume(&session), 6.0);
 }
+
+/// The open menu keeps clicks from the game's buttons behind it, where
+/// its panel is and where only the darkened screen is.
+#[test]
+fn the_menu_blocks_clicks_to_the_game() {
+    let (mut session, index) = menu_session();
+    session
+        .client(index)
+        .unwrap()
+        .run_extra_script(
+            r#"
+            local gui = Instance.new("ScreenGui")
+            gui.IgnoreGuiInset = true
+            local button = Instance.new("TextButton")
+            button.Size = UDim2.fromScale(1, 1)
+            button.Activated:Connect(function() print("clicked") end)
+            button.Parent = gui
+            gui.Parent = game:GetService("Players").LocalPlayer.PlayerGui
+            "#,
+        )
+        .unwrap();
+    session.run_for(0.1);
+    click(&mut session, index, 200.0, 700.0);
+    press(&mut session, index, "Escape");
+    click(&mut session, index, 200.0, 700.0);
+    click(&mut session, index, 600.0, 760.0);
+    press(&mut session, index, "Escape");
+    click(&mut session, index, 200.0, 700.0);
+    let said = lines(session.client(index).unwrap());
+    assert_eq!(said, ["clicked", "opened true", "closed false", "clicked"]);
+}
