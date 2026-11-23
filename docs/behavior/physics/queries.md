@@ -34,6 +34,25 @@ Observed in Studio 0.742 unless noted:
   where a part overlaps its solid surface, whatever the part's
   `CanCollide`.
 
+## Include and exclude lists
+
+`RaycastParams` and `OverlapParams` take `ExcludeInstances` and
+`IncludeInstances` beside the older `FilterDescendantsInstances` and
+`FilterType`. Measured in Studio 0.748 on 2026-11-22 with rays through
+walls, one inside a Folder:
+
+- Both read nil until set, and can be set back to nil.
+- Every list narrows what the query can hit, so they intersect: with
+  `FilterType` Include over a Folder and `IncludeInstances` naming a wall
+  outside it, nothing is hit.
+- Exclusion wins: a part both included (by either list) and excluded is
+  skipped.
+- Descendants count, as for `FilterDescendantsInstances`: naming a Folder
+  covers the parts in it.
+- An empty `IncludeInstances` hits nothing.
+- An assigned table is copied: adding to it afterwards changes nothing,
+  and reading the property gives a new table.
+
 ## WorldModels
 
 Observed in Studio 0.747 on 2026-11-14:

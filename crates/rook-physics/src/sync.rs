@@ -161,6 +161,20 @@ impl Physics {
             }
         }
 
+        // Where scripts moved each body this batch: its joints are placed
+        // around that, not around the body's pose from before the move. A
+        // server's update is left to playback, which eases to it.
+        let posed_on: FxHashSet<RigidBodyHandle> = if moved_joints.is_empty() {
+            FxHashSet::default()
+        } else {
+            posed
+                .iter()
+                .filter_map(|&p| match self.parts.get(&p) {
+                    Some(&Home::Body(h)) if !self.receives(h) => Some(h),
+                    _ => None,
+                })
+                .collect()
+        };
         let mut done = rebuilt.clone();
         for j in moved_joints {
             let Some(&[p0, _]) = self.joints.get(&j) else {
@@ -169,6 +183,9 @@ impl Physics {
             if let Some(h) = self.body_of(p0)
                 && done.insert(h)
             {
+                if posed_on.contains(&h) {
+                    self.align_body(dom, props, h);
+                }
                 self.refresh_offsets(dom, h);
             }
         }

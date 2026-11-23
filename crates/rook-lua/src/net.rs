@@ -22,6 +22,8 @@ pub enum NetValue {
     Bool(bool),
     Number(f64),
     String(Vec<u8>),
+    /// A `buffer`, copied byte for byte (the receiver gets its own).
+    Buffer(Vec<u8>),
     Vector3([f32; 3]),
     /// An instance, by its id in the DataModel that currently holds the value.
     Instance(InstanceId),
@@ -59,6 +61,7 @@ pub(crate) fn to_net(v: &LuaValue, depth: u32) -> NetValue {
         LuaValue::Number(n) => NetValue::Number(*n),
         LuaValue::String(s) => NetValue::String(s.as_bytes().to_vec()),
         LuaValue::Vector(v) => NetValue::Vector3([v.x(), v.y(), v.z()]),
+        LuaValue::Buffer(b) => NetValue::Buffer(b.to_vec()),
         LuaValue::Table(t) if depth < 64 => NetValue::Table(
             t.clone()
                 .pairs::<LuaValue, LuaValue>()
@@ -87,6 +90,7 @@ pub(crate) fn from_net(lua: &Lua, v: &NetValue) -> mlua::Result<LuaValue> {
         NetValue::Number(n) => LuaValue::Number(*n),
         NetValue::String(s) => LuaValue::String(lua.create_string(s)?),
         NetValue::Vector3([x, y, z]) => LuaValue::Vector(mlua::Vector::new(*x, *y, *z)),
+        NetValue::Buffer(b) => LuaValue::Buffer(lua.create_buffer(b)?),
         NetValue::Instance(id) => LuaValue::UserData(push_instance(lua, *id)?),
         NetValue::EnumItem(e, value) => push_item(lua, *e, *value)?,
         NetValue::Data(value) => to_lua(lua, value, None)?,

@@ -537,6 +537,22 @@ impl Physics {
         self.place_held(part);
     }
 
+    /// Put body `h` where its root part is, moving nothing else: a script
+    /// moved the assembly (which moves the root part with it), and its joints
+    /// changed in the same batch, so the joints are placed around where the
+    /// script put it, not around the body's pose from before (which would
+    /// undo the move). The body's pose is its root part's, which a joint
+    /// change can't make stale.
+    pub(crate) fn align_body(&mut self, dom: &Dom, props: &Props, h: RigidBodyHandle) {
+        let Some(body) = self.bodies.get(&h) else {
+            return;
+        };
+        let Some(Value::CFrame(root)) = dom.property(body.asm.root(), props.cframe) else {
+            return;
+        };
+        self.world.bodies[h].set_position(pose_of(&root), true);
+    }
+
     /// A script moved `part` (or set its velocity): move its body to match.
     pub(crate) fn teleport(
         &mut self,

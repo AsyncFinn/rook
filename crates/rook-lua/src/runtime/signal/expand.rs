@@ -78,12 +78,13 @@ pub(crate) fn expand<H: Clone>(change: &Change, signals: &Signals<H>, dom: &Dom)
         Change::Property { id, .. } | Change::Attribute { id, .. }
             if !signals.instance_has_connections(*id) => {}
         Change::Property { id, property } => {
-            push(
-                *id,
-                SignalKind::Event("Changed"),
-                FireArgs::Property(*property),
-            );
-            push(*id, SignalKind::Property(*property), FireArgs::None);
+            // A view that changes with the property reports first
+            // (Inference: Studio's order not isolated).
+            let view = crate::api::properties::changes_with(dom, *id, *property);
+            for p in view.into_iter().chain([*property]) {
+                push(*id, SignalKind::Event("Changed"), FireArgs::Property(p));
+                push(*id, SignalKind::Property(p), FireArgs::None);
+            }
             push(
                 *id,
                 SignalKind::Event("HealthChanged"),

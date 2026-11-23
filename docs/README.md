@@ -64,6 +64,7 @@
   - Lighting
     - [Local lights](behavior/lighting/local-lights.md): PointLight, SpotLight and SurfaceLight
     - [Ambient and OutdoorAmbient](behavior/lighting/ambient.md)
+    - [The clock](behavior/lighting/clock.md): ClockTime, TimeOfDay and SetMinutesAfterMidnight, the sun's and moon's directions
     - [The sun](behavior/lighting/sun.md)
     - [The sky over the day](behavior/lighting/sky.md): its tint at dawn and dusk, and what it reaches
     - [Tone mapping](behavior/lighting/tone-mapping.md): Studio's HDR blending, Neon's glow, ColorGrading's curves and fog
@@ -87,11 +88,13 @@
     - [Bindables](behavior/scripting/bindables.md): the copies arguments arrive as
     - [Content](behavior/scripting/content.md): the `Content` datatype and its constructors
     - [Datatype errors](behavior/scripting/datatype-errors.md): their messages in `pcall`
+    - [Encoding](behavior/scripting/encoding.md): EncodingService's Base64 and zstd, and their errors
     - [Faces, Axes and PhysicalProperties](behavior/scripting/faces-and-axes.md): their `typeof` and printing
     - [JSON](behavior/scripting/json.md): which tables `JSONEncode` writes as arrays
     - [Member lookup](behavior/scripting/member-lookup.md): lowercase first letters, and what a child of that name beats
     - [Nil Instance arguments](behavior/scripting/nil-arguments.md): what each method does with the null object
     - [Random](behavior/scripting/random.md): Luau's generator and each method's draws
+    - [Require by string](behavior/scripting/require-by-string.md): `./`, `../` and `@self` paths, and their errors
     - [Running scripts](behavior/scripting/running-scripts.md): scripts stop the moment they're removed from where they run or disabled
     - [Tags and locked members](behavior/scripting/tags.md): tag signals, and which members a child of the same name beats.
     - [Waiting](behavior/scripting/waiting.md): durations too long for a float last one step

@@ -83,10 +83,22 @@ impl Dom {
         self.ref_property(self.find_service("Players")?, "LocalPlayer")
     }
 
-    /// `Lighting.ClockTime`: Lighting's clock in hours, from `TimeOfDay`.
-    pub fn clock_time(&self, lighting: InstanceId) -> f64 {
-        self.string_property(lighting, "TimeOfDay")
-            .map_or(14.0, |s| rook_types::clock_hours(&s))
+    /// Lighting's clock, which Roblox stores as `TimeOfDay`. A saved string
+    /// that doesn't read is the default 14:00:00, as a script setting one is
+    /// refused (Inference: files with one not seen).
+    pub fn clock(&self, lighting: InstanceId) -> rook_types::Clock {
+        self.str_property(lighting, "TimeOfDay")
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(rook_types::Clock::from_seconds(14 * 3600))
+    }
+
+    /// Direction to Lighting's sun (`Lighting:GetSunDirection()`), by its
+    /// clock and `GeographicLatitude`.
+    pub fn sun_direction(&self, lighting: InstanceId) -> glam::Vec3 {
+        let latitude = self
+            .float_property(lighting, "GeographicLatitude")
+            .unwrap_or(41.733);
+        rook_types::sun_direction(self.clock(lighting), latitude)
     }
 
     pub fn property_id(&self, id: InstanceId, name: &str) -> Option<PropertyId> {

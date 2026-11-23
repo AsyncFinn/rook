@@ -58,6 +58,7 @@ fn expect(source: &str, frames: u32, lines: &[&str]) {
 
 mod characters;
 mod gui;
+mod lighting;
 mod physics;
 mod pivots;
 mod scripting;
