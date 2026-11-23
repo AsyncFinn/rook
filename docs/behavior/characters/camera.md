@@ -218,12 +218,17 @@ in `rook-lua`'s `api/methods/camera/rays.rs` (roll, near plane),
   does to the window, and `LocalTransparencyModifier` in drawing.
   `RunService:BindToRenderStep` and ContextActionService were there.
 - `rook-player` draws from `Workspace.CurrentCamera` while a script drives
-  it: a Scriptable camera, or a player with a PlayerModule or
+  it: a Scriptable camera, or a player who joined with a PlayerModule or
   `CameraScript` in PlayerScripts, character or not, so a client waiting
   to spawn shows its Fixed camera as Studio does, made where Studio's
-  client makes it (it was a new Camera's (0, 20, 20)). Otherwise its own flying
-  camera moves, as before, and gives the game its CFrame. Test:
-  `a_client_draws_its_camera_before_its_character_spawns`.
+  client makes it (it was a new Camera's (0, 20, 20)). What the player
+  joined with counts, not what's left: a place that turns Roblox's camera
+  off with a `CameraScript` that destroys itself and moves the camera with
+  its own code is drawn from that code's camera, as in Studio's Play mode.
+  Otherwise (Run mode, or a player Rook couldn't give camera scripts) its
+  own flying camera moves, as before, and gives the game its CFrame. Tests:
+  `a_client_draws_its_camera_before_its_character_spawns`,
+  `a_place_with_its_own_camera_code_is_drawn_from_it`.
 - The window holds the mouse as `MouseBehavior` says, unless a shown
   GuiButton is `Modal` or a TextBox has focus (Inference: typing frees it),
   and only while it's focused. GUI keeps the buttons with `Modal` set as
