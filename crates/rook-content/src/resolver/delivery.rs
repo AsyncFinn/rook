@@ -5,11 +5,16 @@
 //! Cloud host (in `x-api-key`) and nowhere else, and only while asset
 //! delivery goes to Roblox: a mirror's refusals stand, and nothing else
 //! ever sees the key.
+//! Images asked for as textures come as Roblox transcodes them, in mip
+//! packs ([`textures`]).
 //! Rook never reads browser cookies or any other credential. What the
 //! endpoints answer is in `docs/behavior/content/asset-fetching.md`. Requests go
 //! through [`super::web`].
 
+mod textures;
+
 use std::sync::OnceLock;
+use std::sync::atomic::AtomicBool;
 
 use rook_platform::endpoints::Endpoints;
 use rook_platform::network::Request;
@@ -19,6 +24,8 @@ use super::web::{self, failure_kind};
 use crate::{Failure, FailureKind};
 
 const ANONYMOUS: &str = "/v2/assetId";
+/// Assets in a representation other than their upload's, several at once.
+const BATCH: &str = "/v1/assets/batch";
 /// Fixed, as the key is Roblox's credential.
 const OPEN_CLOUD: &str = "https://apis.roblox.com/asset-delivery-api/v1/assetId";
 /// Larger answers are refused (Roblox's own limits are far below this).
@@ -28,6 +35,11 @@ const MAX_BYTES: u64 = 256 << 20;
 pub struct Delivery {
     /// The anonymous endpoint's URL, up to the asset id.
     anonymous: String,
+    /// The batch endpoint's URL.
+    batch: String,
+    /// Cleared once the batch endpoint isn't there (HTTP 404 or 405: a
+    /// mirror without it), so the run stops asking.
+    batch_works: AtomicBool,
     /// Where the Open Cloud key comes from, when asset delivery goes to
     /// Roblox.
     api_key: Option<ApiKey>,
@@ -40,6 +52,8 @@ impl Delivery {
     pub fn new(api_key: Option<ApiKey>, endpoints: &Endpoints) -> Option<Self> {
         Some(Self {
             anonymous: endpoints.url("assetdelivery", ANONYMOUS)?,
+            batch: endpoints.url("assetdelivery", BATCH)?,
+            batch_works: AtomicBool::new(true),
             api_key: api_key.filter(|_| endpoints.is_roblox("assetdelivery")),
             key: OnceLock::new(),
         })

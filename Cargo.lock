@@ -3820,6 +3820,7 @@ dependencies = [
 name = "rook-content"
 version = "0.5.1"
 dependencies = [
+ "base64 0.23.1",
  "bcdec_rs",
  "blake3",
  "glam 0.33.12",

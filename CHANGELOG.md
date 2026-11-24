@@ -5,6 +5,7 @@ Every release, newest first. How versions are numbered is in
 
 ## [Unreleased]
 
+- Images draw at up to 4096 × 4096, as in Roblox: Rook fetches them as Roblox's client does, in Roblox's KTX2 transcode for textures (its mip packs joined into one file), and keeps them in the GPU's BC1 and BC3 blocks, so a 4096 texture holds 22 MB where 1024 in RGBA8 held 5.6 MB, and small ones less than before. GUI still measures `ImageRectOffset` and `ImageRectSize` as Roblox does, in the upload's size fitted to 1024 (a 1264 × 632 image measures 1024 × 512, where Rook halved it to 632 × 316). Rook fetched every image as uploaded and halved anything past 1024. See [textures](docs/behavior/content/asset-fetching.md#textures).
 - A member's argument that doesn't cast names a table as `Array` or `Dictionary` in its error, and an EnumItem as its enum, as in Roblox. Rook named either by its type in some members' errors.
 - A member function called with an instance of another class in place of `self` raises `Expected ':' not '.'`, as in Roblox. Rook ran the member on whatever instance it was given. See [member lookup](docs/behavior/scripting/member-lookup.md#calling-a-member-function).
 - `Lighting:GetSunDirection`, `GetMoonDirection` and `GetMoonPhase` work, and `ClockTime`, `TimeOfDay` and `SetMinutesAfterMidnight` take odd values and report their changes as in Roblox. Rook raised an error for the three methods and kept the time its own way, so odd values read back differently and only `TimeOfDay` reported a change. See [the clock](docs/behavior/lighting/clock.md).

@@ -35,7 +35,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
 use crate::materials::{self, TexturePack};
-use crate::{ContentRef, Failure, FailureKind, Fetched, MaterialMap, SourceKind};
+use crate::{ContentRef, Failure, FailureKind, Fetched, MaterialMap, SourceKind, Want};
 use cache::{Cache, Cached};
 use delivery::Delivery;
 use install::Install;
@@ -150,10 +150,17 @@ impl Resolver {
     /// Resolve a reference, blocking on disk and network. The engine goes
     /// through a [`Loader`](crate::Loader) instead.
     pub fn resolve(&self, r: &ContentRef) -> Result<Fetched, Failure> {
+        self.resolve_as(r, Want::Bytes)
+    }
+
+    /// Resolve a reference for `want`: an asset id wanted as an image comes
+    /// as Roblox transcodes it for textures where there is such a
+    /// transcode ([`Self::download_texture`]), else as uploaded.
+    pub fn resolve_as(&self, r: &ContentRef, want: Want) -> Result<Fetched, Failure> {
         if let Some(f) = self.failed.lock().expect("failure memo").get(r) {
             return Err(f.clone());
         }
-        let result = self.resolve_uncached(r);
+        let result = self.resolve_uncached(r, want);
         if let Err(f) = &result
             && matches!(f.kind, FailureKind::Network | FailureKind::Offline)
         {
@@ -211,7 +218,7 @@ impl Resolver {
         })
     }
 
-    fn resolve_uncached(&self, r: &ContentRef) -> Result<Fetched, Failure> {
+    fn resolve_uncached(&self, r: &ContentRef, want: Want) -> Result<Fetched, Failure> {
         let asset = match r {
             ContentRef::Material(material, set, map) => {
                 let pack = materials::pack(*material, *set, *map).ok_or_else(|| {
@@ -263,6 +270,9 @@ impl Resolver {
                 FailureKind::Offline,
                 "asset delivery isn't in the provider order",
             ));
+        }
+        if want == Want::Image {
+            return self.download_texture(&asset);
         }
         self.download(&asset)
     }

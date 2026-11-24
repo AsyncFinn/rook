@@ -129,6 +129,7 @@ mod tests {
             encoding: rook_content::decode::image::Encoding::Rgba8,
             mips: vec![level0],
             translucent: false,
+            gui_size: (2, 32),
         };
         let p = from_studs_atlas(&atlas).unwrap();
         let firsts: Vec<u8> = p.layers.iter().map(|l| l[0][0]).collect();

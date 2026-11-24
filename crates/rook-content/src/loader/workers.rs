@@ -41,7 +41,7 @@ pub(super) fn decode(want: Want, mut fetched: Fetched) -> Outcome {
         }
         Want::Image => {
             profiling::scope!("decode image");
-            let image = Image::decode(&fetched.bytes).map_err(|e| invalid(&e))?;
+            let image = Image::decode_texture(&fetched.bytes).map_err(|e| invalid(&e))?;
             fetched.image = Some(Arc::new(image));
         }
         Want::Audio => {
@@ -182,7 +182,7 @@ pub(super) fn spawn_fetchers(resolver: &Arc<Resolver>) -> Workers {
         FETCHERS,
         &jobs,
         move |job: Job, (), priority| {
-            let fetched = resolver.resolve(&job.0);
+            let fetched = resolver.resolve_as(&job.0, job.1);
             match fetched {
                 Ok(fetched) if needs_decoding(job.1, &fetched) => {
                     let done = done_tx.clone();

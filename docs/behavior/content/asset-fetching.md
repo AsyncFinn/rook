@@ -238,6 +238,75 @@ and checks face indices. `cargo xtask content` decodes meshes it shows: `fonts/s
 is 198 triangles, 1.15 x 0.34 x 4.37 studs; version 1 of asset 12221462
 (1.00) is 56 x 40 x 45 studs, the giant mesh Studio drew for it.
 
+## Textures
+
+Checked against Studio 0.748 on 2026-11-23, by logging a second Studio's
+requests (`FLogContentProviderRequests` and `FLogTextureManager2Residency`
+in a local `ClientAppSettings.json`, removed afterwards) and asking asset
+delivery the same questions.
+
+Studio never fetches an image's upload (`source`) to draw it. It asks
+`GET assetdelivery.roblox.com/v1/asset?id=<id>&contentRepresentationPriorityList=<list>&doNotFallbackToBaselineRepresentation=true`,
+where the list is base64 of
+`[{"format":"ktx2","majorVersion":"8","fidelity":"/////AE="}]`
+(Studio sometimes adds a second entry, major version `7rdo`).
+`POST /v1/assets/batch` takes the same `contentRepresentationPriorityList`
+and `doNotFallbackToBaselineRepresentation` per item and answers each with
+a `location` and the `contentRepresentationSpecifier` it matched, so
+several can be asked at once; `/v2/assetId` ignores the list and always
+answers `source`. Asked anonymously, it answers for the images `source`
+does.
+
+What comes is a KTX2 file of BC1 (`vkFormat` 131, opaque) or BC3 (137)
+blocks, each level Zstandard-compressed, smallest level first, with
+key-value data: `RobloxOriginalWidth`/`Height` (the upload's size),
+`transcodedWidth`/`Height`, `contentHash`, `acrVersion` 8, average colors,
+`constantColor` (a flat image is transcoded to 4 × 4), `packIndex`, and
+`pack_<n>` = `first,count` for each mip pack. The texture is split in
+packs, each its own file on the CDN: the `fidelity` is base64 of
+`FF FF FF FC` and the pack plus one (`/////AE=` pack 0, `/////AI=` pack 1,
+...); other masks are refused, apart from one that answers ETC2 for
+mobile GPUs. A 4096 × 4096 upload (BC3) comes in six:
+
+| Pack | `fidelity` | Levels | Largest |
+|---:|---|---|---:|
+| 0 | `/////AE=` | 7 to 12 | 32 |
+| 1 | `/////AI=` | 4 to 6 | 256 |
+| 2 | `/////AM=` | 3 | 512 |
+| 3 | `/////AQ=` | 2 | 1024 |
+| 4 | `/////AU=` | 1 | 2048 |
+| 5 | `/////AY=` | 0 | 4096 |
+
+A 1024 × 1024 one comes in four (64 and below, 256 and 128, 512, 1024), a
+256 × 256 one in two. Sizes that aren't powers of two are rounded down for
+the transcode (a 1264 × 632 upload is 1216 × 576). Studio fetches pack 0
+first, then each next pack only as the texture grows on screen and memory
+allows (`TextureStreaming` budget), so a texture filling the view reaches
+4096 in about five seconds. An image not transcoded yet answers 406
+"Asset content representation is being generated" (`customErrorCode` 21)
+and Roblox starts making it: Studio retries after two seconds, then draws
+the upload (`[{"format":"Original","majorVersion":"Original","fidelity":"Original"}]`,
+up to its full size: one was a 2048 × 2048 JPEG). A pack the texture
+doesn't have answers the same 406; a mesh asked for as a texture, 404.
+
+Rook does the same for any asset id it loads as an image (`Want::Image`):
+pack 0 through the batch endpoint, then every other pack in one more batch
+request, joined into one KTX2 file of every level that is cached under
+`asset-<id>-ktx2` and drawn in its blocks. It fetches every pack rather
+than streaming them by size on screen. When there is no transcode
+(refused anonymously, not an image, still being made) it falls back to the
+upload as before; a refusal is remembered like other failures, a transcode
+being made is asked for again next run. Kept assets stay as kept. The
+upload is decoded up to 4096 a side, and kept in blocks past 1024.
+
+GUI measures `ImageRectOffset` and `ImageRectSize` in neither the
+texture's size nor the upload's, but the upload's fitted to 1024 × 1024,
+the aspect kept (Studio 0.748, ImageLabels of 400 × 200 or 300 × 300 over
+a magenta background): with a 4096 × 4096 upload a 512 × 512 rect showed
+its top-left quarter, and with a 1264 × 632 upload (served 1216 × 576) a
+1024 × 512 rect showed the whole image while 632 × 316 showed part of it.
+Rook halved images past 1024, which measured that one as 632 × 316.
+
 Thumbnails, `rbxthumb://` and the old `thumbs/`, `ThumbnailAsset.ashx` and `*-thumbnail/image` URLs, are in [thumbnails](thumbnails.md).
 
 *Not done yet:* the old paths outside

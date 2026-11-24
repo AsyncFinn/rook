@@ -148,6 +148,68 @@ impl Resolver {
         }
     }
 
+    /// An asset id wanted as an image: Roblox's transcode of it for
+    /// textures ([`Delivery::fetch_texture`]), from the cache (kept under
+    /// its own key, beside the upload) or asset delivery; else the upload
+    /// ([`Self::download`]). A kept asset stays as it was kept. Where there
+    /// is no transcode (not an image, refused without an account) that is
+    /// remembered like any failure, so later runs go straight to the
+    /// upload; one Roblox is still making is asked for again next run.
+    pub(super) fn download_texture(&self, r: &ContentRef) -> Result<Fetched, Failure> {
+        let ContentRef::Asset { id, version } = r else {
+            return self.download(r);
+        };
+        if version.is_none() && kept::version(*id).is_some() {
+            return self.download(r);
+        }
+        let key = format!("{}-ktx2", r.cache_key().expect("an asset"));
+        match self.cache.as_ref().map(|c| c.get(&key)) {
+            Some(Cached::Hit {
+                bytes, path, url, ..
+            }) => {
+                return Ok(Fetched::new(
+                    bytes,
+                    SourceKind::Cache,
+                    format!("{} {url}", path.display()),
+                ));
+            }
+            Some(Cached::Failed(_)) => return self.download(r),
+            Some(Cached::Miss) | None => {}
+        }
+        let Some(delivery) = &self.delivery else {
+            return self.download(r);
+        };
+        match delivery.fetch_texture(*id, *version) {
+            Ok(asset) => {
+                let location = match &self.cache {
+                    Some(cache) => match cache.put(&key, &asset.bytes, &asset.url) {
+                        Ok(path) => format!("{} -> {}", asset.url, path.display()),
+                        Err(e) => {
+                            tracing::warn!(
+                                target: "content",
+                                "couldn't save {r}'s texture in {}: {e}",
+                                cache.dir().display()
+                            );
+                            asset.url
+                        }
+                    },
+                    None => asset.url,
+                };
+                Ok(Fetched::new(asset.bytes, SourceKind::Delivery, location))
+            }
+            Err(f) => {
+                if f.kind.is_lasting()
+                    && let Some(cache) = &self.cache
+                    && let Err(e) = cache.put_failure(&key, &f)
+                {
+                    tracing::debug!(target: "content", "couldn't remember why {r}'s texture failed: {e}");
+                }
+                tracing::debug!(target: "content", "{r} as uploaded: no texture transcode ({f})");
+                self.download(r)
+            }
+        }
+    }
+
     /// A thumbnail: from the cache while fresh ([`THUMBNAIL_TTL`]), else
     /// from the thumbnails service and its CDN, like an asset.
     pub(super) fn thumbnail(&self, t: &Thumbnail) -> Result<Fetched, Failure> {

@@ -1,7 +1,9 @@
 //! Block-compressed images: 4 × 4 pixel blocks the GPU samples as they
 //! are, at an eighth (BC1) or a quarter (BC3, BC5, BC7) of RGBA8's memory.
 //! Material textures are kept this way at their full 1024 × 1024, as
-//! Roblox serves them in BC1 and BC3 ([`super::ktx2`]); the
+//! Roblox serves them in BC1 and BC3 ([`super::ktx2`]), and so are the
+//! textures Roblox transcodes images to, as they come, and decoded images
+//! larger than [`super::COMPRESS_OVER`]; the
 //! roughness-metalness map Rook packs from two images is BC7,
 //! whose blocks keep the three channels apart, and normal maps are BC5,
 //! their X and Y blocks independent. Encoding goes through
@@ -120,7 +122,16 @@ impl Image {
             encoding: Encoding::Rgba8,
             mips,
             translucent: self.translucent,
+            gui_size: self.gui_size,
         }
+    }
+
+    /// The color of the smallest (1 × 1) level, RGBA8.
+    pub fn average(&self) -> [u8; 4] {
+        let last = self.mips.len() - 1;
+        let (w, h) = level_size(self.width, self.height, last);
+        let rgba = self.level_rgba(last, w, h);
+        [rgba[0], rgba[1], rgba[2], rgba[3]]
     }
 
     fn level_rgba(&self, i: usize, w: u32, h: u32) -> Vec<u8> {
@@ -146,6 +157,42 @@ impl Image {
             .flat_map(|y| &whole[y * pitch..y * pitch + row])
             .copied()
             .collect()
+    }
+}
+
+/// Whether any pixel of a BC1 or BC3 `level` is less than opaque, as the
+/// GPU samples it: a BC1 block in its three-color mode (first color not
+/// above the second) using its fourth index (transparent black), a BC3
+/// block using an alpha below 255.
+pub(super) fn translucent(encoding: Encoding, level: &[u8]) -> bool {
+    match encoding {
+        Encoding::Bc1 => level.as_chunks::<8>().0.iter().any(|b| {
+            let (c0, c1) = (
+                u16::from_le_bytes([b[0], b[1]]),
+                u16::from_le_bytes([b[2], b[3]]),
+            );
+            let indices = u32::from_le_bytes([b[4], b[5], b[6], b[7]]);
+            c0 <= c1 && (0..16).any(|i| (indices >> (i * 2)) & 3 == 3)
+        }),
+        Encoding::Bc3 => level.as_chunks::<16>().0.iter().any(|b| {
+            let (a0, a1) = (u16::from(b[0]), u16::from(b[1]));
+            let mut alphas = [a0, a1, 0, 0, 0, 0, 0, 255];
+            if a0 > a1 {
+                for (i, a) in alphas.iter_mut().enumerate().skip(2) {
+                    *a = ((8 - i as u16) * a0 + (i as u16 - 1) * a1) / 7;
+                }
+            } else {
+                for (i, a) in alphas.iter_mut().enumerate().take(6).skip(2) {
+                    *a = ((6 - i as u16) * a0 + (i as u16 - 1) * a1) / 5;
+                }
+            }
+            let bits = b[2..8]
+                .iter()
+                .rev()
+                .fold(0u64, |acc, &byte| (acc << 8) | u64::from(byte));
+            (0..16).any(|i| alphas[((bits >> (i * 3)) & 7) as usize] < 255)
+        }),
+        Encoding::Rgba8 | Encoding::Bc5 | Encoding::Bc7 => false,
     }
 }
 
@@ -240,6 +287,49 @@ mod tests {
         let back = quarters().compressed(Encoding::Bc1).decompressed(4);
         assert_eq!((back.width, back.height, back.mips.len()), (4, 4, 3));
         assert_eq!(back.mips[0].len(), 4 * 4 * 4);
+    }
+
+    /// Opaque and translucent blocks are told apart as the GPU decodes
+    /// them.
+    #[test]
+    fn finds_translucent_blocks() {
+        let opaque = quarters();
+        assert!(!opaque.translucent);
+        for encoding in [Encoding::Bc1, Encoding::Bc3] {
+            let packed = opaque.clone().compressed(encoding);
+            assert!(!translucent(encoding, &packed.mips[0]), "{encoding:?}");
+        }
+        // Three-color BC1 using its fourth index.
+        let cut = [[0, 0], [0xFF, 0xFF], [0xFF; 2], [0xFF; 2]].concat();
+        assert!(translucent(Encoding::Bc1, &cut));
+        // Four-color BC1 using it is opaque.
+        let four = [[0xFF, 0xFF], [0, 0], [0xFF; 2], [0xFF; 2]].concat();
+        assert!(!translucent(Encoding::Bc1, &four));
+        // BC3: both alphas 255 with every index 6 (0 in that mode).
+        let mut bc3 = vec![255, 255];
+        bc3.extend([0b1011_0110, 0b0110_1101, 0b1101_1011].repeat(2));
+        bc3.extend([0; 8]);
+        assert!(translucent(Encoding::Bc3, &bc3));
+        bc3[2..8].fill(0);
+        assert!(!translucent(Encoding::Bc3, &bc3));
+        let back = Image::from_rgba(
+            ::image::RgbaImage::from_pixel(8, 8, ::image::Rgba([9, 9, 9, 100])),
+            ImageFormat::Png,
+            1024,
+        )
+        .unwrap()
+        .compressed(Encoding::Bc3);
+        assert!(translucent(Encoding::Bc3, &back.mips[0]));
+    }
+
+    #[test]
+    fn averages_from_the_smallest_level() {
+        let plain = quarters();
+        let packed = plain.clone().compressed(Encoding::Bc1);
+        assert_eq!(plain.average(), *plain.mips.last().unwrap().as_slice());
+        for (a, b) in packed.average().iter().zip(plain.average()) {
+            assert!(a.abs_diff(b) <= 8);
+        }
     }
 
     /// Sides that aren't multiples of 4 stay RGBA8.

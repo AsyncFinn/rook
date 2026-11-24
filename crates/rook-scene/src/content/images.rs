@@ -20,12 +20,14 @@ pub(crate) struct ImageInfo {
 }
 
 impl ImageInfo {
+    /// The size GUI measures the image in (whatever size its pixels came
+    /// in) and its color.
     fn of(image: &Image) -> Self {
-        let px = image.mips.last().expect("mip chain");
+        let [r, g, b, _] = image.average();
         Self {
-            width: image.width,
-            height: image.height,
-            average: [px[0], px[1], px[2]].map(|c| f32::from(c) / 255.0),
+            width: image.gui_size.0,
+            height: image.gui_size.1,
+            average: [r, g, b].map(|c| f32::from(c) / 255.0),
         }
     }
 }
@@ -77,6 +79,7 @@ mod tests {
             encoding: rook_content::decode::image::Encoding::Rgba8,
             mips: vec![vec![255, 0, 0, 255, 255, 0, 0, 255], vec![255, 0, 0, 255]],
             translucent: false,
+            gui_size: (2, 1),
         });
         let hash = ImageHash([1; 32]);
         images.add(hash, image.clone());

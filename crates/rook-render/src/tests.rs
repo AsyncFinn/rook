@@ -40,6 +40,7 @@ fn image() -> Arc<Image> {
         encoding: rook_content::decode::image::Encoding::Rgba8,
         mips: rook_content::decode::image::mips(pixels.concat(), 2, 2),
         translucent: false,
+        gui_size: (2, 2),
     })
 }
 
