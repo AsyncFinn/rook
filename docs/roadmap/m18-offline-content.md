@@ -12,5 +12,5 @@ stop being downloadable.
 4. Rook's own PlayerModule and the rest of Rook's own CoreScripts (M8
    step 9 starts them), matching modern Roblox's behavior by behavior,
    checked against Roblox's running in Rook, so a place plays with
-   nothing of Roblox's but its assets and content files
+   nothing of Roblox's but its assets
    ([decided](../design/research.md#open-questions) 2026-10-26).
