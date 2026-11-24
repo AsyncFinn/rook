@@ -167,6 +167,50 @@ applies them each frame before GUI lays out:
   hands it back to the rules at once (React clears props that way: the
   player list's hover color).
 
+## Rook's own
+
+Without Roblox's CoreScripts, a client runs Rook's own: the Luau package
+in `crates/rook-engine/corescripts/` (`core_scripts/rook.rs` loads it).
+Its first pieces are the top bar's button and [the in-game menu](menu.md).
+Later pieces (backpack, player list, chat, prompts) are planned the same
+way.
+
+- **Layout.** A folder tree of Luau modules: `CoreScripts/` (the entry
+  scripts, `StarterScript` first), one folder per piece (`TopBar/`,
+  `Menu/`), `Components/` (the rows, controls and measured `Theme` every
+  piece builds from), `CoreApi/` (the one module that registers SetCore
+  and GetCore names; `CoreApi/Names.lua` lists each name, its piece and
+  its source) and `PlayerSettings/`. In a folder, `<name>.lua` is a
+  ModuleScript, and a folder with an `init.lua` is one too.
+- **Packages.** `Packages/` holds React-Lua 17.3.13 (the version Studio
+  0.748 runs) and what it requires. They are vendored at the pins in
+  `packages.toml` by `cargo xtask vendor-packages`: Luau modules only, no
+  tests, each package with its license. React-Lua comes from GitHub at a
+  commit on `main`, whose newest tag is older. LuauPolyfill, Promise and
+  SafeFlags come from Wally, at the versions React-Lua's own `wally.toml`
+  files ask for, because SafeFlags isn't on GitHub. All are MIT.
+  `Packages/` keeps each package's own layout, whose modules require each
+  other by relative paths, so a few of its files sit four folders deep.
+- **The file.** `cargo xtask core-scripts` builds the folder into
+  `RookCoreScripts.rbxm`, in the patch's shape. `CoreScripts/` becomes
+  `PatchRoot.CoreScripts` (named `CoreScripts/<Name>`, as Roblox's are),
+  the pieces go under `DataModelInstances.CoreGui.RobloxGui.Modules`, and
+  `Packages/` under `DataModelInstances.CorePackages.Packages`. A client
+  installs it as it installs Roblox's patch, and `StarterScript` starts
+  each piece with `ScriptContext:AddCoreScriptLocal`. The file holds
+  source, which Rook compiles when it loads: about 50 ms for React-Lua
+  and its packages on one thread, 15 across 32.
+- **Where it's read.** `RookCoreScripts.rbxm` beside the exe, as Roblox's
+  `DataModelPatch.rbxm` sits in its version folder (`cargo xtask package`
+  puts it beside `rook-player`). A build with no file there reads
+  `corescripts/` from the source tree it was built from, so editing a
+  script takes a restart, not a rebuild.
+- **PlayerScripts.** The package has none. A client running it gets no
+  PlayerModule, as before it existed, and the window flies its own
+  camera ([camera](../characters/camera.md)).
+- **Images.** Its logo and icons are `rbxasset://rook/` images, drawn
+  from `resources/` when Rook is built ([resources](../../../resources/README.md#built-in-images)).
+
 ## What Rook lacks
 
 The members the CoreScripts call that Rook doesn't have, from the run

@@ -72,15 +72,17 @@ impl CorePatch {
         let mut scripts = Vec::new();
         for (i, &top) in dom.root().children().iter().enumerate() {
             let index = u32::try_from(i).map_err(|e| e.to_string())?;
-            collect(&dom, top, vec![index], &mut scripts);
+            collect(&dom, top, &[index], &mut scripts);
         }
-        let compiled = rook_platform::get().workers.map(&scripts, |(path, name, source)| {
-            mlua::chunk::Compiler::new()
-                .set_optimization_level(2)
-                .compile(source)
-                .map(|code| (path.clone(), Arc::<[u8]>::from(code)))
-                .map_err(|e| format!("{name}: {e}"))
-        });
+        let compiled = rook_platform::get()
+            .workers
+            .map(&scripts, |(path, name, source)| {
+                mlua::chunk::Compiler::new()
+                    .set_optimization_level(2)
+                    .compile(source)
+                    .map(|code| (path.clone(), Arc::<[u8]>::from(code)))
+                    .map_err(|e| format!("{name}: {e}"))
+            });
         let compiled = compiled.into_iter().collect::<Result<Vec<_>, _>>()?;
         Ok(Self {
             dom,
@@ -93,17 +95,19 @@ impl CorePatch {
 
 /// Every script under `id` (and `id` itself): its place in the tree, its
 /// full name for errors, and its source.
-fn collect(dom: &WeakDom, id: Ref, path: Vec<u32>, out: &mut Vec<(Vec<u32>, String, String)>) {
+fn collect(dom: &WeakDom, id: Ref, path: &[u32], out: &mut Vec<(Vec<u32>, String, String)>) {
     let Some(instance) = dom.get_by_ref(id) else {
         return;
     };
-    if let Some(rbx_dom_weak::types::Variant::String(source)) = instance.properties.get(&"Source".into()) {
-        out.push((path.clone(), full_name(dom, id), source.clone()));
+    if let Some(rbx_dom_weak::types::Variant::String(source)) =
+        instance.properties.get(&"Source".into())
+    {
+        out.push((path.to_vec(), full_name(dom, id), source.clone()));
     }
     for (i, &child) in instance.children().iter().enumerate() {
-        let mut at = path.clone();
+        let mut at = path.to_vec();
         at.push(u32::try_from(i).unwrap_or(u32::MAX));
-        collect(dom, child, at, out);
+        collect(dom, child, &at, out);
     }
 }
 
@@ -237,7 +241,10 @@ fn luau(path: &Path) -> bool {
 }
 
 fn stem(path: &Path) -> String {
-    let name = path.file_name().and_then(|n| n.to_str()).unwrap_or_default();
+    let name = path
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or_default();
     let name = name
         .strip_suffix(".luau")
         .or_else(|| name.strip_suffix(".lua"))

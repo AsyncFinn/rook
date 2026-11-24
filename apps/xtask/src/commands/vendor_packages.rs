@@ -148,7 +148,9 @@ fn modules(files: &Files, folder: &str) -> Files {
         .filter_map(|(path, bytes)| {
             let rel = path.strip_prefix(&prefix)?;
             let luau = rel.ends_with(".lua") || rel.ends_with(".luau");
-            let test = rel.split('/').any(|p| p == "__tests__" || p == "__testUtils__")
+            let test = rel
+                .split('/')
+                .any(|p| p == "__tests__" || p == "__testUtils__")
                 || [".spec.lua", ".test.lua", ".spec.luau", ".test.luau"]
                     .iter()
                     .any(|s| rel.ends_with(s))
@@ -174,18 +176,20 @@ fn normalize(bytes: &[u8]) -> Vec<u8> {
 }
 
 fn get(url: &str, headers: &[(&str, &str)]) -> anyhow::Result<Vec<u8>> {
-    let mut request = ureq::get(url).header("User-Agent", "rook-xtask");
-    for (k, v) in headers {
-        request = request.header(*k, *v);
-    }
-    let mut response = request.call().with_context(|| url.to_owned())?;
-    let bytes = response
-        .body_mut()
-        .with_config()
-        .limit(256 * 1024 * 1024)
-        .read_to_vec()
-        .with_context(|| url.to_owned())?;
-    Ok(bytes)
+    let mut all = vec![("User-Agent", "rook-xtask")];
+    all.extend_from_slice(headers);
+    let response = rook_platform::get()
+        .network
+        .send(&rook_platform::network::Request {
+            method: "GET",
+            url,
+            headers: &all,
+            body: &[],
+            max_bytes: 256 * 1024 * 1024,
+        })
+        .map_err(|e| anyhow::anyhow!("{url}: {e}"))?;
+    anyhow::ensure!(response.status == 200, "{url}: {}", response.status);
+    Ok(response.body)
 }
 
 fn unzip(bytes: &[u8]) -> anyhow::Result<Files> {

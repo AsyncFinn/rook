@@ -3,6 +3,10 @@
 //! from `rook.svg`, the white rook alone from the same file (`logo-mark`),
 //! and the icons in `resources/icons/` drawn in white for scripts to tint
 //! (`icons/<name>`). See resources/README.md.
+#![expect(
+    clippy::disallowed_methods,
+    reason = "a build script runs on the build machine, outside rook-platform"
+)]
 
 use std::{env, fmt::Write, fs, path::PathBuf};
 
@@ -24,7 +28,10 @@ fn main() {
     // The mark: the icon without its tile, the one <rect> in it.
     let start = logo.find("<rect").expect("rook.svg's tile");
     let end = start + logo[start..].find("/>").expect("the tile's end") + 2;
-    images.push(("logo-mark.png".into(), format!("{}{}", &logo[..start], &logo[end..])));
+    images.push((
+        "logo-mark.png".into(),
+        format!("{}{}", &logo[..start], &logo[end..]),
+    ));
 
     let icons = resources.join("icons");
     println!("cargo::rerun-if-changed={}", icons.display());

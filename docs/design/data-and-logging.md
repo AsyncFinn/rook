@@ -84,7 +84,7 @@ Each is given by its flag, then its variable, then its default; the first that g
 | `assetDelivery` | `ROOK_ASSET_DELIVERY` | | developer | on in `rook-player` and `cargo xtask content`, off in headless runs | Whether content may be downloaded (asset delivery, Roblox's packages) |
 | `dataFolder` | `ROOK_DATA_DIR` | | developer | the platform's folders | Everything under one folder |
 | `coreScripts` | `ROOK_CORE_SCRIPTS` | `--core-scripts` | developer | `off` | Run Roblox's own CoreScripts on each client ([CoreScripts](../behavior/gui/core-scripts.md)); the flag is `rook-player`'s and `cargo xtask run-headless --join`'s |
-| `menu` | `ROOK_MENU` | `--no-menu` | any build | `on` | `rook-player`'s client runs Rook's own in-game menu, which Escape opens, unless it runs Roblox's CoreScripts ([the menu](../behavior/gui/menu.md)); off, Escape closes the player |
+| `menu` | `ROOK_MENU` | `--no-menu` | any build | `on` | `rook-player`'s client runs Rook's own CoreScripts (its top bar and the in-game menu Escape opens) unless it runs Roblox's ([the menu](../behavior/gui/menu.md)); off, Escape closes the player |
 
 ### The Open Cloud key
 

@@ -25,7 +25,11 @@ mod tests {
 
     #[test]
     fn the_logo_and_icons_are_built_in() {
-        for path in ["rook/logo.png", "rook/logo-mark.png", "Rook/Icons/Settings.png"] {
+        for path in [
+            "rook/logo.png",
+            "rook/logo-mark.png",
+            "Rook/Icons/Settings.png",
+        ] {
             let png = find(path).unwrap_or_else(|| panic!("{path}"));
             assert_eq!(&png[1..4], b"PNG", "{path}");
         }

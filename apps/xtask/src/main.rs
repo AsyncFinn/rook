@@ -6,8 +6,8 @@
 mod commands;
 
 use commands::{
-    conformance, content, core_scripts, corpus, drift, dump, gen_api, package, pin_content, roundtrip,
-    run_headless, studio_defaults, terrain, vendor_packages,
+    conformance, content, core_scripts, corpus, drift, dump, gen_api, package, pin_content,
+    roundtrip, run_headless, studio_defaults, terrain, vendor_packages,
 };
 use std::path::{Path, PathBuf};
 
@@ -190,8 +190,9 @@ enum Command {
     /// Build Rook's CoreScripts (crates/rook-engine/corescripts) into an
     /// .rbxm, the file the engine loads them from.
     CoreScripts {
-        /// Where to write it (default: next to the debug build's exe).
-        #[arg(long, default_value = "target/debug/RookCoreScripts.rbxm")]
+        /// Where to write it: beside the exe that should load it. Without
+        /// one there, a build reads crates/rook-engine/corescripts itself.
+        #[arg(long, default_value = "target/release/RookCoreScripts.rbxm")]
         out: PathBuf,
     },
     /// Check the repository for drift (copied functions, long comment

@@ -202,7 +202,7 @@ pub fn framerate_cap(uncapped: Option<bool>, cap: Option<i32>) -> Option<i32> {
     })
 }
 
-/// Whether clients run Rook's own in-game menu ([`crate::menu`]): on
+/// Whether clients run Rook's own CoreScripts ([`crate::core_scripts::rook`]): on
 /// unless the `menu` setting is off (`no_menu` is `--no-menu`).
 pub fn menu(no_menu: bool) -> bool {
     MENU.switch(no_menu.then_some(false)) != Some(false)

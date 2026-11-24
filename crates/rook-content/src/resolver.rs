@@ -1,12 +1,12 @@
 //! The provider chain: a reference goes to each provider in turn until one
 //! has it.
 
+pub mod builtin;
 #[expect(
     clippy::disallowed_methods,
     clippy::disallowed_types,
     reason = "the content cache, install lookup and decode workers are rook-platform's known exception (docs/design/architecture.md#crate-layout)"
 )]
-pub mod builtin;
 pub mod cache;
 mod config;
 pub mod defaults;

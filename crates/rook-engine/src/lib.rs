@@ -13,7 +13,6 @@ pub mod core_scripts;
 pub mod data_folder;
 mod frame;
 pub mod logging;
-pub mod menu;
 mod rigs;
 mod scripts;
 pub mod session;
@@ -98,8 +97,9 @@ pub struct Options {
     /// Roblox's CoreScripts, which clients run for the GUI Roblox draws
     /// itself (`settings::core_scripts`); `None` runs without them.
     pub core_scripts: Option<Arc<core_scripts::CorePatch>>,
-    /// Clients run Rook's own in-game menu ([`menu`], the `menu`
-    /// setting) when they don't run Roblox's CoreScripts.
+    /// Clients run Rook's own CoreScripts ([`core_scripts::rook`], the
+    /// `menu` setting: its top bar and in-game menu) when they don't run
+    /// Roblox's.
     pub menu: bool,
     /// Where scripts' web requests go; `None` uses `settings::endpoints`.
     pub endpoints: Option<Arc<rook_platform::endpoints::Endpoints>>,

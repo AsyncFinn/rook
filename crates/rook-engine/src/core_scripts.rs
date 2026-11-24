@@ -21,7 +21,6 @@ mod roblox;
 pub mod rook;
 
 use rustc_hash::FxHashMap;
-use std::path::Path;
 use std::sync::Arc;
 
 use rbx_dom_weak::WeakDom;
