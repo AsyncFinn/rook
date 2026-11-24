@@ -75,8 +75,10 @@ impl ClientHost {
         }
         if let Some(patch) = &options.core_scripts {
             patch.install(&client);
-        } else if options.menu {
-            crate::menu::install(&client);
+        } else if options.menu
+            && let Some(package) = crate::core_scripts::CorePatch::rook()
+        {
+            package.install(&client);
         }
         client.note_camera_scripts();
         client.start();

@@ -1,5 +1,6 @@
 pub(crate) mod conformance;
 pub(crate) mod content;
+pub(crate) mod core_scripts;
 pub(crate) mod corpus;
 pub(crate) mod drift;
 pub(crate) mod dump;
@@ -11,3 +12,4 @@ pub(crate) mod run_headless;
 pub(crate) mod studio;
 pub(crate) mod studio_defaults;
 pub(crate) mod terrain;
+pub(crate) mod vendor_packages;
