@@ -8,6 +8,7 @@
 //! [`Value`] is the dynamic property value. It mirrors `rbx_types::Variant`
 //! one-to-one so conversion in either direction is lossless.
 
+mod cast;
 mod clock;
 pub mod counters;
 mod enums;
@@ -16,6 +17,7 @@ mod gui;
 mod part;
 mod value;
 
+pub use cast::{int32, int64};
 pub use clock::{Clock, MOON_PHASE, TimeOfDayError, moon_direction, sun_direction};
 pub use enums::{GamepadKey, MeshType, RollOffMode, RunContext, UserInputState, UserInputType};
 pub use font::{

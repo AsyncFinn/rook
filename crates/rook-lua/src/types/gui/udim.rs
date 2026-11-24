@@ -49,7 +49,7 @@ impl UserData for LPath2DControlPoint {
 /// infinities and anything past an `i32` read -2147483648 whichever side
 /// they're on.
 fn offset(v: Num) -> i32 {
-    crate::runtime::ctx::convert::int32(v.0)
+    rook_types::int32(v.0)
 }
 
 fn fmt_udim(u: UDim) -> String {

@@ -201,15 +201,9 @@ fn key_text(lua: &Lua, k: &LuaValue) -> ApiResult<Vec<u8>> {
     Ok(match k {
         LuaValue::String(s) => s.as_bytes().to_vec(),
         LuaValue::Integer(_) | LuaValue::Number(_) => {
-            let n = number_of(k).unwrap_or(0.0);
-            let whole = if n.is_nan()
-                || !(-9.223_372_036_854_776e18..9.223_372_036_854_776e18).contains(&n)
-            {
-                i64::MIN
-            } else {
-                n as i64
-            };
-            whole.to_string().into_bytes()
+            rook_types::int64(number_of(k).unwrap_or(0.0))
+                .to_string()
+                .into_bytes()
         }
         LuaValue::Boolean(_) => return Err(ScriptError("Invalid table key type used".into())),
         k => {

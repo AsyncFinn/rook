@@ -45,20 +45,13 @@ impl Clock {
         Clock::from_minutes(f64::from(hours) * 60.0)
     }
 
-    /// What `SetMinutesAfterMidnight(minutes)` stores: the seconds,
-    /// truncated into a 32-bit integer, wrapped into the day. NaN is
-    /// 20:45:52 in Studio, which is exactly where the x86 conversion's
-    /// "integer indefinite" (-2^31) wraps to; the same conversion gives it
-    /// for counts out of range (Inference: only NaN measured).
+    /// What `SetMinutesAfterMidnight(minutes)` stores: the seconds, cast
+    /// to a 32-bit integer as Roblox casts numbers ([`crate::int32`]),
+    /// wrapped into the day. NaN is 20:45:52 in Studio, exactly where
+    /// -2^31 wraps to; counts out of range taking the same path is
+    /// Inference (only NaN measured).
     pub fn from_minutes(minutes: f64) -> Clock {
-        let seconds = minutes * 60.0;
-        let whole = if seconds.is_nan() || !(-2_147_483_649.0..2_147_483_648.0).contains(&seconds) {
-            i32::MIN
-        } else {
-            // In range, so `as` truncates towards zero as C's conversion does.
-            seconds as i32
-        };
-        Clock::from_seconds(i64::from(whole))
+        Clock::from_seconds(i64::from(crate::int32(minutes * 60.0)))
     }
 
     pub fn seconds(self) -> u32 {

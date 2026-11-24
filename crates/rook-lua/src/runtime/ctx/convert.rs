@@ -94,7 +94,9 @@ pub(crate) fn from_lua(lua: &Lua, v: &LuaValue, ty: PropertyType) -> Result<Valu
                 }
                 VariantType::Float32 => Value::Float32(loose_number(v).ok_or_else(fail)? as f32),
                 VariantType::Float64 => Value::Float64(loose_number(v).ok_or_else(fail)?),
-                VariantType::Int32 => Value::Int32(int32(loose_number(v).ok_or_else(fail)?)),
+                VariantType::Int32 => {
+                    Value::Int32(rook_types::int32(loose_number(v).ok_or_else(fail)?))
+                }
                 VariantType::Int64 => Value::Int64(loose_number(v).ok_or_else(fail)? as i64),
                 VariantType::String => Value::String(lua_string(v).ok_or_else(fail)?),
                 VariantType::ContentId => Value::ContentId(lua_string(v).ok_or_else(fail)?.into()),
@@ -144,20 +146,6 @@ pub(crate) fn from_lua(lua: &Lua, v: &LuaValue, ty: PropertyType) -> Result<Valu
                 }
             })
         }
-    }
-}
-
-/// A number as Roblox turns it into a 32-bit integer: cut toward zero,
-/// and -2147483648 for NaN, the infinities and anything past an `i32` on
-/// either side, as x86's truncating conversion gives. Measured on
-/// `UDim.Offset` and `SoundEffect.Priority` (2^31, -2^31 - 1, 1e12 and
-/// NaN all read -2147483648; conformance case `content/int_properties`).
-pub(crate) fn int32(n: f64) -> i32 {
-    let cut = n.trunc();
-    if (f64::from(i32::MIN)..=f64::from(i32::MAX)).contains(&cut) {
-        cut as i32
-    } else {
-        i32::MIN
     }
 }
 
