@@ -1,33 +1,33 @@
-//! Texture streaming: a texture on a surface in the world loads at its
-//! smallest (`Want::Texture(0)`), then larger as it grows on screen, as
-//! Roblox's client does (measured in Studio 0.748,
-//! docs/behavior/content/asset-fetching.md#streaming): each texture is
-//! wanted at the smallest power of two at least as many pixels across as
-//! the surface it covers takes on screen, and no smaller than 64. Only
-//! what is in view grows, and nothing shrinks again.
+//! Texture streaming, as Roblox's client does it
+//! (docs/behavior/content/asset-fetching.md#streaming): a texture on a
+//! surface loads at its smallest pack, is wanted at the size it takes on
+//! screen, and grows there a level every 0.35 s (`Files::step`). Only what
+//! is in view grows, and nothing shrinks again.
 //!
-//! [`SceneCache::stream_textures`] looks over the drawn parts a few times
-//! a second: for a decal its face, for a texture one tile, for a mesh's
-//! texture or a decal through its UVs the whole part, sized on screen from
-//! the nearest point of the part to the camera.
+//! The scene keeps the entries whose textures can still grow, noted as
+//! they're written ([`SceneCache::note_streaming`]);
+//! [`SceneCache::stream_textures`] looks over only those, a few times a
+//! second, and drops each once its textures can't grow. A decal is sized
+//! by its face, a texture by one tile, a mesh's texture by the whole part,
+//! each from the part's point nearest the camera.
 
 use glam::{Vec2, Vec3};
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 use rook_content::decode::mesh::Mesh;
 use rook_render::{Camera, DrawShape, ImageHash, ImagePlacement, Layer, MeshHash, PartInstance};
 use rook_types::NormalId;
 use rustc_hash::FxHashMap;
 
+use super::loader::LARGEST;
 use crate::SceneCache;
 
-/// Frames between looks over the parts.
-const EVERY: u32 = 6;
+/// Time between looks over the entries that can grow.
+const EVERY: Duration = Duration::from_millis(100);
 /// The smallest size a texture in view is wanted at, as `Want::Texture`'s
 /// exponent (64 pixels: Studio asked for 64 for a decal 28 pixels across).
 const SMALLEST: u8 = 6;
-/// The largest size there is (Roblox's limit, 4096).
-const LARGEST: u8 = 12;
 
 /// The camera and the view's size in pixels, as last given.
 #[derive(Debug, Clone, Copy)]
@@ -69,27 +69,52 @@ impl SceneCache {
         });
     }
 
-    /// Every few frames, ask for each texture in view at the size it takes
-    /// on screen; `now` looks over the parts this frame whatever.
-    pub(crate) fn stream_textures(&mut self, now: bool) {
-        self.stream_tick = self.stream_tick.wrapping_add(1);
-        if !now && !self.stream_tick.is_multiple_of(EVERY) {
-            return;
+    /// Note that entry `i` of `scene.parts` was written: it's looked over
+    /// while it draws a texture that may still grow.
+    pub(crate) fn note_streaming(&mut self, i: usize) {
+        if surface_images(&self.scene.parts[i])
+            .iter()
+            .any(Option::is_some)
+        {
+            self.streaming.insert(i);
         }
-        let Some(view) = self.view else {
-            return;
-        };
-        profiling::scope!("SceneCache::stream_textures");
+    }
+
+    /// A few times a second (or `now` whatever), ask for each texture in
+    /// view that can still grow at the size it takes on screen, and step
+    /// the textures growing towards theirs (straight there with `now`,
+    /// for screenshots).
+    pub(crate) fn stream_textures(&mut self, now: bool) {
+        let time = Instant::now();
+        let due = self.streamed_at.is_none_or(|at| time >= at + EVERY);
+        if (now || due)
+            && let Some(view) = self.view
+        {
+            self.streamed_at = Some(time);
+            self.want_textures(view);
+        }
+        self.files.step(time, now);
+    }
+
+    /// Look over the entries whose textures can still grow, dropping those
+    /// that can't (whole, at 4096, no longer drawing one), and want each
+    /// texture in view at its size on screen.
+    fn want_textures(&mut self, view: View) {
+        profiling::scope!("SceneCache::want_textures");
         let mut wanted: FxHashMap<ImageHash, (u8, f32)> = FxHashMap::default();
         let per_stud = view.pixels_per_stud();
-        for part in &self.scene.parts {
-            let images = surface_images(part);
+        let (parts, meshes, files) = (&self.scene.parts, &self.scene.meshes, &self.files);
+        self.streaming.retain(|&i| {
+            let Some(part) = parts.get(i) else {
+                return false;
+            };
+            let images = surface_images(part).map(|s| s.filter(|(image, _)| files.can_grow(image)));
             if images.iter().all(Option::is_none) {
-                continue;
+                return false;
             }
-            let half = half_extents(part, &self.scene.meshes);
+            let half = half_extents(part, meshes);
             if !view.sees(part.position, half.length()) {
-                continue;
+                return true;
             }
             let local = part.rotation.transpose() * (view.camera.position - part.position);
             let distance = (local.abs() - half).max(Vec3::ZERO).length().max(0.05);
@@ -100,9 +125,10 @@ impl SceneCache {
                 entry.0 = entry.0.max(size);
                 entry.1 = entry.1.min(distance);
             }
-        }
+            true
+        });
         for (image, (size, distance)) in wanted {
-            self.files.upgrade(image, size, distance);
+            self.files.want(image, size, distance);
         }
     }
 }
@@ -210,6 +236,35 @@ mod tests {
         };
         assert_eq!(tiled(34.0), Some(34.0));
         assert_eq!(tiled(0.25), Some(0.25), "repeated over the face");
+    }
+
+    /// The scene looks over only the entries drawing a texture that can
+    /// still grow: written ones join, released ones and those whose
+    /// textures can't grow (here, none loaded small) leave.
+    #[test]
+    fn looks_over_only_what_can_grow() {
+        let mut dom = rook_dom::Dom::new();
+        let ws = dom.get_service("Workspace").unwrap();
+        let part = dom.create_by_name("Part").unwrap();
+        dom.set_parent(part, Some(ws)).unwrap();
+        let content = Arc::new(rook_content::Resolver::new(rook_content::Config::empty()));
+        let mut cache = SceneCache::new(&dom, crate::Floors::default(), content, Vec3::ZERO);
+        assert!(cache.streaming.is_empty(), "a plain part draws no texture");
+        let i = cache.index[&part];
+        cache.scene.parts[i].texture = Some(ImageHash([1; 32]));
+        cache.note_streaming(i);
+        assert!(cache.streaming.contains(&i));
+        cache.release(i);
+        assert!(cache.streaming.is_empty());
+
+        cache.note_streaming(i);
+        cache.set_view(
+            &Camera::look_at(Vec3::new(0.0, 0.0, 10.0), Vec3::ZERO),
+            800,
+            600,
+        );
+        cache.stream_textures(true);
+        assert!(cache.streaming.is_empty(), "its texture can't grow");
     }
 
     #[test]

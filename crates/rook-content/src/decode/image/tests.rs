@@ -192,3 +192,19 @@ fn rejects_zero_max_size() {
         Err(ImageError::Damaged("PNG", _))
     ));
 }
+
+/// GUI and the sky draw an upload fitted to 1024 × 1024, the aspect kept,
+/// in the size GUI measures rects in; only surface textures come larger.
+#[test]
+fn gui_images_fit_1024() {
+    let wide = ::image::RgbaImage::from_pixel(2048, 1000, ::image::Rgba([1, 2, 3, 255]));
+    let img = Image::decode_gui(&png_of(&wide)).unwrap();
+    assert_eq!((img.width, img.height), (1024, 500));
+    assert_eq!((img.encoding, img.gui_size), (Encoding::Rgba8, (1024, 500)));
+    let small = ::image::RgbaImage::from_pixel(300, 200, ::image::Rgba([1, 2, 3, 255]));
+    let img = Image::decode_gui(&png_of(&small)).unwrap();
+    assert_eq!(
+        (img.width, img.height, img.gui_size),
+        (300, 200, (300, 200))
+    );
+}

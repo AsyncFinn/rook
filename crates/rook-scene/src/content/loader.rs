@@ -6,12 +6,14 @@
 //! in the frame, so a frame never waits for disk, network or decoding. Each
 //! file is kept once by the hash of its bytes; one that fails keeps why
 //! ([`Files::failure`]) for the load report. A texture loads small
-//! (`Want::Texture(0)`) and [`Files::upgrade`] asks for it larger as it
-//! grows on screen; the larger version replaces it under the hash it first
-//! loaded by ([`Files::take_upgraded`]).
+//! (`Want::Texture(0)`); [`Files::want`] says how large it should be and
+//! [`Files::step`] grows it there a level at a time, as Studio does; each
+//! larger version replaces it under the hash it first loaded by
+//! ([`Files::take_upgraded`]).
 
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 use rook_content::decode::image::Image;
 use rook_content::decode::mesh::Mesh;
@@ -36,18 +38,71 @@ pub(crate) enum FileState {
     Failed,
 }
 
+/// How long Studio 0.748 took for each level a texture grew by
+/// (docs/behavior/content/asset-fetching.md#streaming).
+pub(crate) const STEP: Duration = Duration::from_millis(350);
+/// The largest level there is, as `Want::Texture`'s exponent (4096).
+pub(crate) const LARGEST: u8 = 12;
+
 /// A texture that loaded small, by the hash it first loaded under.
 #[derive(Debug)]
 struct Streamed {
     r: ContentRef,
-    /// The size asked for so far, as `Want::Texture`'s exponent.
-    asked: u8,
+    /// The level it's wanted at so far, as `Want::Texture`'s exponent:
+    /// one more each step until `target`.
+    level: u8,
+    /// The level it should grow to ([`Files::want`]).
+    target: u8,
     /// Its largest level's longer side now.
     side: u32,
-    /// It has no larger version: the last one asked for came no larger,
-    /// or failed.
+    /// It has no larger version: the last one asked for came smaller
+    /// than asked, or failed.
     whole: bool,
     loading: bool,
+    /// When it may step again.
+    next: Instant,
+    /// What its fetches queue by (lower first).
+    priority: f32,
+}
+
+impl Streamed {
+    fn new(r: ContentRef, side: u32, now: Instant) -> Self {
+        // The level its largest is at: pack 0's 32 is 5.
+        let level = (u32::BITS - side.max(1).leading_zeros() - 1) as u8;
+        Self {
+            r,
+            level,
+            target: level,
+            side,
+            whole: false,
+            loading: false,
+            next: now,
+            priority: 0.0,
+        }
+    }
+
+    /// Whether it can still come larger.
+    fn can_grow(&self) -> bool {
+        !self.whole && self.level < LARGEST
+    }
+
+    /// Whether it's still to step (below its target, or loading).
+    fn stepping(&self) -> bool {
+        self.loading || (self.can_grow() && self.level < self.target)
+    }
+
+    /// Grow a level towards the target (straight to it with `hurry`) if
+    /// it last stepped [`STEP`] before `now` and isn't loading; the level
+    /// to fetch when that's past what it holds.
+    fn step(&mut self, now: Instant, hurry: bool) -> Option<u8> {
+        if self.loading || !self.stepping() || (!hurry && now < self.next) {
+            return None;
+        }
+        self.level = if hurry { self.target } else { self.level + 1 };
+        self.next = now + STEP;
+        self.loading = side_of(self.level) > self.side;
+        self.loading.then_some(self.level)
+    }
 }
 
 #[derive(Debug)]
@@ -59,6 +114,9 @@ pub(crate) struct Files {
     failures: FxHashMap<FileRef, Failure>,
     tickets: FxHashMap<Ticket, FileRef>,
     streamed: FxHashMap<ImageHash, Streamed>,
+    /// The streamed textures still to step: below their target, or
+    /// loading a step.
+    stepping: FxHashSet<ImageHash>,
     /// Larger versions of textures being loaded.
     upgrades: FxHashMap<Ticket, ImageHash>,
     /// Larger versions that arrived, for [`Files::take_upgraded`].
@@ -74,31 +132,55 @@ impl Files {
             failures: FxHashMap::default(),
             tickets: FxHashMap::default(),
             streamed: FxHashMap::default(),
+            stepping: FxHashSet::default(),
             upgrades: FxHashMap::default(),
             upgraded: Vec::new(),
         }
     }
 
-    /// Ask for a texture that loaded small (`Want::Texture(0)`) at least
-    /// `1 << size` pixels across, behind files of a lower `priority`,
-    /// unless it's that large already, has no larger version, or is
-    /// already being loaded larger. Returns whether it asked.
-    pub(crate) fn upgrade(&mut self, hash: ImageHash, size: u8, priority: f32) -> bool {
+    /// Whether the texture under `hash` loaded small and can still come
+    /// larger.
+    pub(crate) fn can_grow(&self, hash: &ImageHash) -> bool {
+        self.streamed.get(hash).is_some_and(Streamed::can_grow)
+    }
+
+    /// Have a texture that loaded small (`Want::Texture(0)`) grow to at
+    /// least `1 << size` pixels across, its fetches behind files of a lower
+    /// `priority` ([`Files::step`] grows it). A smaller size than it was
+    /// wanted at before changes nothing: textures never shrink.
+    pub(crate) fn want(&mut self, hash: ImageHash, size: u8, priority: f32) {
         let Some(s) = self.streamed.get_mut(&hash) else {
-            return false;
+            return;
         };
-        let side = 1u32.checked_shl(u32::from(size)).unwrap_or(u32::MAX);
-        if s.whole || s.loading || size <= s.asked || s.side >= side {
-            return false;
+        s.priority = priority;
+        let size = size.min(LARGEST);
+        if s.can_grow() && size > s.target {
+            s.target = size;
+            self.stepping.insert(hash);
         }
+    }
+
+    /// Grow each texture below the size it's wanted at by a level, those
+    /// that last stepped at least [`STEP`] before `now` and aren't still
+    /// loading the last; a level past what it holds asks for the packs
+    /// that make it. With `hurry`, each goes straight to its size
+    /// (screenshots).
+    pub(crate) fn step(&mut self, now: Instant, hurry: bool) {
         let Some(loader) = &mut self.loader else {
-            return false;
+            return;
         };
-        let ticket = loader.request_at(s.r.clone(), Want::Texture(size), priority);
-        self.upgrades.insert(ticket, hash);
-        s.asked = size;
-        s.loading = true;
-        true
+        let streamed = &mut self.streamed;
+        let upgrades = &mut self.upgrades;
+        self.stepping.retain(|hash| {
+            let Some(s) = streamed.get_mut(hash) else {
+                return false;
+            };
+            if let Some(level) = s.step(now, hurry) {
+                let ticket = loader.request_at(s.r.clone(), Want::Texture(level), s.priority);
+                upgrades.insert(ticket, *hash);
+            }
+            s.stepping()
+        });
     }
 
     /// The larger versions of textures that arrived since the last call,
@@ -117,8 +199,7 @@ impl Files {
             return;
         };
         let side = image.width.max(image.height);
-        let asked = 1u32.checked_shl(u32::from(s.asked)).unwrap_or(u32::MAX);
-        if side < asked {
+        if side < side_of(s.level) {
             s.whole = true;
         }
         if side > s.side {
@@ -149,7 +230,7 @@ impl Files {
     }
 
     pub(crate) fn idle(&self) -> bool {
-        self.tickets.is_empty() && self.upgrades.is_empty()
+        self.tickets.is_empty() && self.upgrades.is_empty() && self.stepping.is_empty()
     }
 
     pub(crate) fn set_priority(&self, key: &FileRef, priority: f32) {
@@ -193,12 +274,8 @@ impl Files {
                 loaded.ok_or_else(|| Failure::new(FailureKind::Invalid, "not a mesh or an image"))
             });
             if let (Want::Texture(0), Ok(Loaded::Image(hash, image))) = (key.1, &loaded) {
-                self.streamed.entry(*hash).or_insert_with(|| Streamed {
-                    r: key.0.clone(),
-                    asked: 0,
-                    side: image.width.max(image.height),
-                    whole: false,
-                    loading: false,
+                self.streamed.entry(*hash).or_insert_with(|| {
+                    Streamed::new(key.0.clone(), image.width.max(image.height), Instant::now())
                 });
             }
             let state = match &loaded {
@@ -214,5 +291,88 @@ impl Files {
             out.push((key, loaded));
         }
         out
+    }
+}
+
+/// The side of a level, as `Want::Texture`'s exponent.
+fn side_of(level: u8) -> u32 {
+    1u32.checked_shl(u32::from(level)).unwrap_or(u32::MAX)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Grows `s` to `target` stepping every `STEP`, each fetch arriving
+    /// at once as the packs of a 4096 texture (largest 32, 256, 512, 1024,
+    /// 2048, 4096); the levels fetched, and the time it took.
+    fn grow(s: &mut Streamed, target: u8, start: Instant) -> (Vec<u8>, Duration) {
+        s.target = target;
+        let mut now = start;
+        let mut fetched = Vec::new();
+        while s.stepping() {
+            if let Some(level) = s.step(now, false) {
+                fetched.push(level);
+                s.loading = false;
+                s.side = [32, 256, 256, 256, 512, 1024, 2048, 4096][usize::from(level) - 5];
+            }
+            now += Duration::from_millis(50);
+        }
+        (fetched, now - start)
+    }
+
+    /// Studio 0.748 grew a texture a level every 0.35 s, fetching each
+    /// pack as its first level was wanted.
+    #[test]
+    fn grows_a_level_at_a_time() {
+        let start = Instant::now();
+        let mut s = Streamed::new(
+            ContentRef::Asset {
+                id: 1,
+                version: None,
+            },
+            32,
+            start,
+        );
+        assert_eq!(s.level, 5);
+        let (fetched, took) = grow(&mut s, 10, start);
+        // 64 brings pack 1 (to 256), so 128 and 256 need nothing more.
+        assert_eq!(fetched, [6, 9, 10]);
+        assert_eq!(s.level, 10);
+        // Five levels, the first at once.
+        assert!(took >= STEP * 4 && took < STEP * 5, "{took:?}");
+    }
+
+    #[test]
+    fn a_screenshot_goes_straight_to_its_size() {
+        let start = Instant::now();
+        let mut s = Streamed::new(
+            ContentRef::Asset {
+                id: 1,
+                version: None,
+            },
+            32,
+            start,
+        );
+        s.target = 12;
+        assert_eq!(s.step(start, true), Some(12));
+        assert!(s.stepping(), "until it arrives");
+    }
+
+    #[test]
+    fn nothing_steps_past_whole() {
+        let start = Instant::now();
+        let mut s = Streamed::new(
+            ContentRef::Asset {
+                id: 1,
+                version: None,
+            },
+            32,
+            start,
+        );
+        s.target = 8;
+        s.whole = true;
+        assert_eq!(s.step(start, false), None);
+        assert!(!s.stepping());
     }
 }

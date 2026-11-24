@@ -39,8 +39,13 @@ pub(super) fn decode(want: Want, mut fetched: Fetched) -> Outcome {
             })?;
             fetched.mesh = Some(Arc::new(mesh));
         }
-        Want::Image | Want::Texture(_) => {
+        Want::Image => {
             profiling::scope!("decode image");
+            let image = Image::decode_gui(&fetched.bytes).map_err(|e| invalid(&e))?;
+            fetched.image = Some(Arc::new(image));
+        }
+        Want::Texture(_) => {
+            profiling::scope!("decode texture");
             let image = Image::decode_texture(&fetched.bytes).map_err(|e| invalid(&e))?;
             fetched.image = Some(Arc::new(image));
         }

@@ -7,6 +7,10 @@ use super::*;
 use crate::Thumbnail;
 use crate::decode::image::ktx2;
 
+/// How long to wait before asking again for a texture being made
+/// (Studio 0.748 waited two seconds).
+const BEING_GENERATED_RETRY: Duration = Duration::from_secs(2);
+
 /// How long a stored thumbnail is used before the service is asked again:
 /// avatars and icons change, and Studio asks every session. A stale one
 /// still answers when the service can't be reached.
@@ -177,7 +181,17 @@ impl Resolver {
                 let Some(delivery) = &self.delivery else {
                     return self.download(r);
                 };
-                match delivery.texture_packs(*id, *version, &[0]) {
+                let mut answer = delivery.texture_packs(*id, *version, &[0]);
+                // Not made yet: Roblox starts making it on this request.
+                // Studio asks again after two seconds, then draws the
+                // upload.
+                if let Err(f) = &answer
+                    && delivery::being_generated(f)
+                {
+                    std::thread::sleep(BEING_GENERATED_RETRY);
+                    answer = delivery.texture_packs(*id, *version, &[0]);
+                }
+                match answer {
                     Ok(mut got) => {
                         let first = got.swap_remove(0);
                         self.keep_pack(&key(0), &first.bytes, &first.url);

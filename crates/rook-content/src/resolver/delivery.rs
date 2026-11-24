@@ -12,6 +12,7 @@
 //! through [`super::web`].
 
 mod textures;
+pub(crate) use textures::being_generated;
 
 use std::sync::OnceLock;
 use std::sync::atomic::AtomicBool;

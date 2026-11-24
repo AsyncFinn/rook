@@ -151,8 +151,11 @@ pub struct SceneCache {
     /// The camera and view size textures are sized on screen by
     /// ([`SceneCache::set_view`]).
     view: Option<content::streaming::View>,
-    /// Counts frames, for looking over textures every few.
-    stream_tick: u32,
+    /// The entries (indices into `scene.parts`) drawing a texture that
+    /// may still grow on screen ([`SceneCache::note_streaming`]).
+    streaming: FxHashSet<usize>,
+    /// When those were last looked over.
+    streamed_at: Option<std::time::Instant>,
 }
 
 impl SceneCache {
@@ -193,7 +196,8 @@ impl SceneCache {
             images,
             hand: None,
             view: None,
-            stream_tick: 0,
+            streaming: FxHashSet::default(),
+            streamed_at: None,
         };
         cache.rebuild(dom);
         cache
@@ -205,6 +209,7 @@ impl SceneCache {
         self.model_highlights.clear();
         self.scene.highlights.clear();
         self.scene.parts.clear();
+        self.streaming.clear();
         self.poses.clear();
         self.free.clear();
         self.index.clear();

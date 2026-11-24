@@ -306,10 +306,14 @@ levels and drawn in its blocks. Each pack is cached on its own
 (`asset-<id>-ktx2-p<n>`), so a texture growing on screen fetches only the
 packs it adds. Refused anonymously, with a key saved, it fetches each pack
 from Open Cloud instead (a 4096 texture's six in about 4 s). GUI images,
-the sky and SurfaceAppearance maps come as uploaded (`Want::Image`). When there is no transcode (refused, not an image, still
-being made) it falls back to the upload as before; a refusal is remembered like other failures, a transcode
-being made is asked for again next run. Kept assets stay as kept. The
-upload is decoded up to 4096 a side, and kept in blocks past 1024.
+the sky and SurfaceAppearance maps come as uploaded (`Want::Image`),
+fitted to 1024 × 1024 with the aspect kept, the size GUI measures them in
+(below). When there is no transcode it falls back to the upload as
+before: a refusal or an image that isn't one at once, remembered like
+other failures; a transcode being made after asking once more two seconds
+later, as Studio does, and it's asked for again next run. Kept assets
+stay as kept. An upload drawn on a surface is decoded up to 4096 a side,
+and kept in blocks past 1024.
 
 GUI measures `ImageRectOffset` and `ImageRectSize` in neither the
 texture's size nor the upload's, but the upload's fitted to 1024 × 1024,
@@ -351,13 +355,20 @@ was still whole. Studio lowers textures only under memory pressure
 (`ReduceMipLevels`, `TextureStreaming` budget), which this didn't reach.
 
 Rook does the same ([`content/streaming.rs`](../../../crates/rook-scene/src/content/streaming.rs)):
-a texture loads at pack 0, and every few frames the scene sizes each
-texture in view on screen (a decal's face, a texture's tile, a mesh's
-texture over the whole part, seen from the part's nearest point) and asks
-for the packs that make it that large. The larger version replaces the
+a texture loads at pack 0, and ten times a second the scene sizes on
+screen each texture in view that can still grow (a decal's face, a
+texture's tile, even one larger than its face, a mesh's texture over the
+whole part, seen from the part's nearest point). Each grows towards that
+size a level every 0.35 s, fetching the packs a level needs when it gets
+there, so a 4096 texture seen up close from pack 0 reaches 4096 in seven
+steps, about 2.1 s. The scene keeps the entries whose textures can still
+grow as they're written, and looks over only those: once a texture is
+whole, at 4096, or its entry stops drawing it, it's left out, and a place
+with nothing left to grow pays nothing. The larger version replaces the
 smaller in the renderer under the same image, so nothing is placed again.
-A screenshot waits for the sizes its camera wants. Effects and adornments
-load whole. Rook never lowers a texture and has no memory budget.
+A screenshot goes straight to the sizes its camera wants. Effects and
+adornments load whole. Rook never lowers a texture and has no memory
+budget.
 
 Thumbnails, `rbxthumb://` and the old `thumbs/`, `ThumbnailAsset.ashx` and `*-thumbnail/image` URLs, are in [thumbnails](thumbnails.md).
 

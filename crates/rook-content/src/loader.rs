@@ -72,8 +72,9 @@ pub enum Want {
     /// [`FailureKind::UnknownVersion`] for a version Rook doesn't read.
     Mesh,
     /// An image as uploaded (what GUI and the sky draw): the worker
-    /// decodes it to RGBA8 with mips into [`Fetched::image`]; bytes that
-    /// aren't an image fail with [`FailureKind::Invalid`].
+    /// decodes it to RGBA8 with mips into [`Fetched::image`], fitted to
+    /// 1024 × 1024 (`Image::decode_gui`); bytes that aren't an image fail
+    /// with [`FailureKind::Invalid`].
     Image,
     /// An image for a surface in the world (decals, textures, meshes,
     /// effects), as Roblox's client fetches those: its transcode for

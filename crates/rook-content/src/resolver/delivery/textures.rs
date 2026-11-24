@@ -33,6 +33,16 @@ const FIDELITY: [u8; 4] = [0xFF, 0xFF, 0xFF, 0xFC];
 const MAX_PACKS: usize = 8;
 /// Asset delivery's `customErrorCode` for a representation not made yet.
 const BEING_GENERATED: u64 = 21;
+/// The message of the failure for a texture not made yet
+/// ([`being_generated`]).
+const BEING_GENERATED_MESSAGE: &str = "the texture is being generated";
+
+/// Whether `failure` says the texture isn't made yet (asset delivery's
+/// 406 with `customErrorCode` 21): Roblox starts making it on the first
+/// request, so asking again shortly may find it.
+pub(crate) fn being_generated(failure: &Failure) -> bool {
+    failure.kind == FailureKind::Network && failure.message == BEING_GENERATED_MESSAGE
+}
 
 /// The `contentRepresentationPriorityList` asking for one pack: base64
 /// of a JSON list of one representation.
@@ -202,7 +212,7 @@ fn answer_failure(answer: &Value, status: u16) -> Failure {
     let error = &answer["errors"][0];
     let message = error["message"].as_str().unwrap_or("no texture").to_owned();
     if error["customErrorCode"].as_u64() == Some(BEING_GENERATED) {
-        return Failure::new(FailureKind::Network, message);
+        return Failure::new(FailureKind::Network, BEING_GENERATED_MESSAGE);
     }
     let code = error["code"].as_u64().unwrap_or(u64::from(status));
     Failure::new(failure_kind(code, status), message)

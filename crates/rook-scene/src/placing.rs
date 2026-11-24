@@ -5,7 +5,7 @@ use super::*;
 
 impl SceneCache {
     pub(super) fn take_index(&mut self, entry: PartInstance, pose: Pose) -> usize {
-        match self.free.pop() {
+        let i = match self.free.pop() {
             Some(i) => {
                 self.scene.parts[i] = entry;
                 self.poses[i] = pose;
@@ -16,12 +16,15 @@ impl SceneCache {
                 self.poses.push(pose);
                 self.scene.parts.len() - 1
             }
-        }
+        };
+        self.note_streaming(i);
+        i
     }
 
     /// Stop drawing entry `i`, keeping its index for reuse.
     pub(super) fn release(&mut self, i: usize) {
         self.scene.parts[i].transparency = 1.0;
+        self.streaming.remove(&i);
         self.free.push(i);
     }
 
@@ -59,6 +62,7 @@ impl SceneCache {
             Some(&i) => {
                 self.scene.parts[i] = part;
                 self.poses[i] = pose;
+                self.note_streaming(i);
                 i
             }
             None => {
@@ -100,6 +104,7 @@ impl SceneCache {
                 Some(i) => {
                     self.scene.parts[i] = layer;
                     self.poses[i] = pose;
+                    self.note_streaming(i);
                     i
                 }
                 None => self.take_index(layer, pose),
