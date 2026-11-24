@@ -6,8 +6,8 @@
 mod commands;
 
 use commands::{
-    conformance, content, corpus, drift, dump, gen_api, package, pin_content, roundtrip,
-    run_headless, studio_defaults, terrain,
+    conformance, content, core_scripts, corpus, drift, dump, gen_api, package, pin_content,
+    roundtrip, run_headless, studio_defaults, terrain, vendor_packages,
 };
 use std::path::{Path, PathBuf};
 
@@ -183,6 +183,18 @@ enum Command {
     /// Write the list of content Rook keeps for good again, with each
     /// asset's version today (crates/rook-content/data/kept.txt).
     PinContent,
+    /// Copy the packages Rook's CoreScripts require (React-Lua and its
+    /// dependencies) into crates/rook-engine/corescripts/Packages, at the
+    /// pins in its packages.toml.
+    VendorPackages,
+    /// Build Rook's CoreScripts (crates/rook-engine/corescripts) into an
+    /// .rbxm, the file the engine loads them from.
+    CoreScripts {
+        /// Where to write it: beside the exe that should load it. Without
+        /// one there, a build reads crates/rook-engine/corescripts itself.
+        #[arg(long, default_value = "target/release/RookCoreScripts.rbxm")]
+        out: PathBuf,
+    },
     /// Check the repository for drift (copied functions, long comment
     /// blocks, environment reads below rook-engine, broken doc links and
     /// indexes); `scripts/check` runs it.
@@ -354,6 +366,10 @@ fn command(command: Command) -> anyhow::Result<()> {
             ConformanceAction::Run => conformance::run(&dir, filter.as_deref()),
         },
         Command::PinContent => pin_content::pin(Path::new("crates/rook-content/data/kept.txt")),
+        Command::VendorPackages => {
+            vendor_packages::run(Path::new("crates/rook-engine/corescripts"))
+        }
+        Command::CoreScripts { out } => core_scripts::run(&out),
         Command::Drift => drift::run(),
         Command::GenApi {
             dump,

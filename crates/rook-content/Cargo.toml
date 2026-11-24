@@ -29,6 +29,10 @@ tracing.workspace = true
 zip.workspace = true
 zstd.workspace = true
 
+[build-dependencies]
+# Rook's built-in images (build.rs): its logo and icons from resources/
+resvg.workspace = true
+
 [dev-dependencies]
 rook-platform = { workspace = true, features = ["native"] }
 

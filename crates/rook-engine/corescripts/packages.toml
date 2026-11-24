@@ -1,0 +1,40 @@
+# The packages Rook's CoreScripts require, copied into Packages/ by
+# `cargo xtask vendor-packages`: each named package becomes
+# Packages/<name>/ (CorePackages.Packages.<name> in game) with its Luau
+# modules, no tests, and its license. Change a pin here and run the
+# command again; the update shows up as a diff of Packages/.
+#
+# React-Lua 17.3.13, the version Studio 0.748 runs, is on GitHub's main
+# branch only (its newest tag is 17.1.3). What it requires comes from
+# Wally, at the versions React-Lua's own wally.toml files ask for:
+# SafeFlags isn't on GitHub (React-Lua's rotriever.toml names a private
+# repository), and LuauPolyfill's newest tag there is 1.2.3. All are MIT.
+
+[[github]]
+repo = "Roblox/react-lua"
+commit = "b658f53426892ea4e86ac16a0d368f966703590b"
+license = "LICENSE"
+packages = { React = "modules/react/src", ReactRoblox = "modules/react-roblox/src", ReactReconciler = "modules/react-reconciler/src", Scheduler = "modules/scheduler/src", Shared = "modules/shared/src", ReactGlobals = "modules/react-globals/src" }
+
+[wally]
+LuauPolyfill = "roblox/luau-polyfill@1.2.5"
+Boolean = "roblox/luau-polyfill-boolean@1.2.5"
+Collections = "roblox/luau-polyfill-collections@1.2.5"
+Console = "roblox/luau-polyfill-console@1.2.5"
+ES7Types = "roblox/luau-polyfill-es7-types@1.2.5"
+InstanceOf = "roblox/luau-polyfill-instance-of@1.2.5"
+Math = "roblox/luau-polyfill-math@1.2.5"
+Number = "roblox/luau-polyfill-number@1.2.5"
+String = "roblox/luau-polyfill-string@1.2.5"
+Timers = "roblox/luau-polyfill-timers@1.2.5"
+Symbol = "roblox/symbol@1.0.1"
+Promise = "roblox/promise@3.5.2"
+SafeFlags = "roblox/safe-flags@0.1.2"
+
+# LuauPolyfill's Wally packages carry no license file: theirs is the
+# repository's.
+[[license]]
+repo = "Roblox/luau-polyfill"
+commit = "8100f5c609c78d8e0876e502aa3e1f59472b00b7"
+path = "LICENSE"
+packages = ["LuauPolyfill", "Boolean", "Collections", "Console", "ES7Types", "InstanceOf", "Math", "Number", "String", "Timers"]

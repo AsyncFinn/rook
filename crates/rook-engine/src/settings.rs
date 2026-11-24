@@ -202,6 +202,12 @@ pub fn framerate_cap(uncapped: Option<bool>, cap: Option<i32>) -> Option<i32> {
     })
 }
 
+/// Whether clients run Rook's own CoreScripts ([`crate::core_scripts::rook`]): on
+/// unless the `menu` setting is off (`no_menu` is `--no-menu`).
+pub fn menu(no_menu: bool) -> bool {
+    MENU.switch(no_menu.then_some(false)) != Some(false)
+}
+
 /// The output device to play through: `audioDevice`, then the player's
 /// choice (`saved`, from [`crate::settings::user_settings::PlayerSettings`]); `None`
 /// is no sound.

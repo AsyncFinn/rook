@@ -1,6 +1,7 @@
 //! The provider chain: a reference goes to each provider in turn until one
 //! has it.
 
+pub mod builtin;
 #[expect(
     clippy::disallowed_methods,
     clippy::disallowed_types,
@@ -230,6 +231,10 @@ impl Resolver {
                 return self.thumbnail(t);
             }
             ContentRef::File(path) => {
+                if let Some(bytes) = builtin::find(path) {
+                    let name = format!("rbxasset://{path}");
+                    return Ok(Fetched::new(bytes.to_vec(), SourceKind::Defaults, name));
+                }
                 if let Some(found) = self.resolve_local(r) {
                     return Ok(found);
                 }

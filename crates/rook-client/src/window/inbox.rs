@@ -211,8 +211,8 @@ impl App {
         down: bool,
         text: Option<String>,
     ) {
-        // Escape ends typing in a TextBox, or opens Roblox's menu, rather
-        // than closing the player.
+        // Escape ends typing in a TextBox, or opens the in-game menu,
+        // rather than closing the player.
         let typing = self.game.typing();
         // Repeats only edit a TextBox; the engine drops the rest.
         if let Some(name) = keys::roblox_key(code) {
@@ -220,7 +220,7 @@ impl App {
             self.game.input(InputEvent::Key { code, down });
         }
         if down {
-            if code == KeyCode::Escape && !typing && !self.game.core_menu() {
+            if code == KeyCode::Escape && !typing && !self.game.menu() {
                 event_loop.exit();
             }
             self.keys.insert(code);

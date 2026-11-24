@@ -47,8 +47,9 @@ pub struct Game {
     behind: f64,
     /// When loading the place started (`--bench` times content from it).
     pub(crate) load_start: std::time::Instant,
-    /// The client runs Roblox's CoreScripts, whose menu Escape opens.
-    core_menu: bool,
+    /// The client runs an in-game menu, which Escape opens: Roblox's
+    /// CoreScripts' or Rook's own.
+    menu: bool,
     pub(crate) name: String,
 }
 
@@ -104,6 +105,9 @@ pub struct Setup {
     /// unless this holds each frame until they have.
     pub wait_for_sounds: bool,
     pub core_scripts: Option<Arc<rook_engine::core_scripts::CorePatch>>,
+    /// The client runs Rook's own in-game menu when it doesn't run
+    /// Roblox's CoreScripts (the `menu` setting).
+    pub menu: bool,
     /// The player's settings file; `None` for runs that aren't played,
     /// whose changes aren't saved.
     pub user_settings: Option<PathBuf>,
@@ -118,6 +122,7 @@ impl Loading {
             content: Some(setup.content.clone()),
             wait_for_sounds: setup.wait_for_sounds,
             core_scripts: setup.core_scripts.clone(),
+            menu: setup.menu,
             user_settings: setup.user_settings.clone(),
             ..Options::default()
         };
@@ -203,9 +208,10 @@ impl Finish {
     }
 
     fn game(&self, mode: Mode, saved_camera: Camera) -> Game {
-        let core_menu = matches!(mode, Mode::Play { .. }) && self.options.core_scripts.is_some();
+        let menu = matches!(mode, Mode::Play { .. })
+            && (self.options.core_scripts.is_some() || self.options.menu);
         let game = Game {
-            core_menu,
+            menu,
             mode,
             saved_camera,
             server_steps: Times::default(),
@@ -378,10 +384,19 @@ impl Game {
         }
     }
 
-    /// Whether the client runs Roblox's CoreScripts, whose menu Escape
-    /// opens.
-    pub fn core_menu(&self) -> bool {
-        self.core_menu
+    /// Whether the client runs an in-game menu, which Escape opens
+    /// (Roblox's CoreScripts' or Rook's own).
+    pub fn menu(&self) -> bool {
+        self.menu
+    }
+
+    /// Whether a script on the client asked to leave (`game:Shutdown()`,
+    /// the menu's Leave).
+    pub fn leaving(&self) -> bool {
+        match &self.mode {
+            Mode::Play { client, .. } => client.client().shutdown_requested(),
+            Mode::Run(_) => false,
+        }
     }
 
     /// Whether keys are typing into a TextBox.

@@ -71,6 +71,8 @@ With Roblox's CoreScripts on (`--core-scripts`, or `ROOK_CORE_SCRIPTS=on`, in bu
 | Mouse wheel, I / O | Zoom (all the way in is first person) |
 | Escape | Roblox's menu |
 
+Without Roblox's CoreScripts, Rook's own menu takes its place: the logo button at the top left, or Escape, opens it, with the volume, output device, fullscreen, frame rate and camera settings, Leave and Resume ([the menu](../behavior/gui/menu.md)). `--no-menu` leaves it out, and Escape then closes the player.
+
 Without them, or while you have no character, the window flies its own camera:
 
 | Control | Action |

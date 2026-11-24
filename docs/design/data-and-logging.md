@@ -84,6 +84,7 @@ Each is given by its flag, then its variable, then its default; the first that g
 | `assetDelivery` | `ROOK_ASSET_DELIVERY` | | developer | on in `rook-player` and `cargo xtask content`, off in headless runs | Whether content may be downloaded (asset delivery, Roblox's packages) |
 | `dataFolder` | `ROOK_DATA_DIR` | | developer | the platform's folders | Everything under one folder |
 | `coreScripts` | `ROOK_CORE_SCRIPTS` | `--core-scripts` | developer | `off` | Run Roblox's own CoreScripts on each client ([CoreScripts](../behavior/gui/core-scripts.md)); the flag is `rook-player`'s and `cargo xtask run-headless --join`'s |
+| `menu` | `ROOK_MENU` | `--no-menu` | any build | `on` | `rook-player`'s client runs Rook's own CoreScripts (its top bar and the in-game menu Escape opens) unless it runs Roblox's ([the menu](../behavior/gui/menu.md)); off, Escape closes the player |
 
 ### The Open Cloud key
 
@@ -139,7 +140,7 @@ Each run of the player writes one file, `logs\rook-player-<time>.log`. `cargo xt
 
 `rook logs` prints the newest log's path. `rook logs --open` opens the folder.
 
-`rook-player` is a console program, so a terminal waits for it and it prints there, but opened from Explorer it has no console, so the log file is the only record there. Its manifest (`apps/rook-player/rook-player.manifest`) asks Windows 11 24H2 and later not to make one (the [console allocation policy](https://learn.microsoft.com/en-us/windows/console/console-allocation-policy)); on older Windows it closes the one it was given at startup when no other program shares it (`rook_platform::console`). What ends a windowed run is shown in a native message box, what failed as its title and why as its text (`apps/rook-player/src/alert.rs`): a place that can't be read or fails to start, a GPU Rook can't draw with, a crash. Rook's own CoreScripts don't exist yet to show these in its window. Runs that make a file or a measurement (`--screenshot`, `--bench`, `--record-audio`) only print, so scripts aren't held up.
+`rook-player` is a console program, so a terminal waits for it and it prints there, but opened from Explorer it has no console, so the log file is the only record there. Its manifest (`apps/rook-player/rook-player.manifest`) asks Windows 11 24H2 and later not to make one (the [console allocation policy](https://learn.microsoft.com/en-us/windows/console/console-allocation-policy)); on older Windows it closes the one it was given at startup when no other program shares it (`rook_platform::console`). What ends a windowed run is shown in a native message box, what failed as its title and why as its text (`apps/rook-player/src/alert.rs`): a place that can't be read or fails to start, a GPU Rook can't draw with, a crash. Rook's own CoreScripts don't show these in its window yet. Runs that make a file or a measurement (`--screenshot`, `--bench`, `--record-audio`) only print, so scripts aren't held up.
 
 ### Crash reports
 

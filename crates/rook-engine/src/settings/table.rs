@@ -140,6 +140,14 @@ pub const CORE_SCRIPTS: Setting = Setting {
     flag: Some("core-scripts"),
 };
 
+pub const MENU: Setting = Setting {
+    name: "menu",
+    tier: Tier::Any,
+    unset: Unset::Is("on"),
+    var: "ROOK_MENU",
+    flag: Some("no-menu"),
+};
+
 /// Every setting, in the docs' order.
 pub const ALL: &[&Setting] = &[
     &FRAME_TIMES,
@@ -159,6 +167,7 @@ pub const ALL: &[&Setting] = &[
     &ASSET_DELIVERY,
     &DATA_FOLDER,
     &CORE_SCRIPTS,
+    &MENU,
 ];
 
 #[cfg(test)]

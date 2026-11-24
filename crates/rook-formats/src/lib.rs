@@ -21,7 +21,7 @@ pub mod legacy;
 mod retype;
 
 pub use compare::{CompareOptions, compare, compare_with};
-pub use compiled::{CompiledScript, compiled_scripts};
+pub use compiled::{CompiledScript, compile_scripts, compiled_scripts};
 pub use convert::{Converted, Placing, Tree, copy_into_dom, from_dom, into_dom};
 
 use std::io::Cursor;

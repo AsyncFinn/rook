@@ -39,6 +39,12 @@ pub(crate) fn run() -> anyhow::Result<()> {
         built.join(format!("rook-player{exe}")),
         folder.join("bin").join(format!("rook-player{exe}")),
     )?;
+    // Rook's CoreScripts, beside the player that loads them.
+    super::core_scripts::run(
+        &folder
+            .join("bin")
+            .join(rook_engine::core_scripts::rook::FILE),
+    )?;
     for file in FILES {
         fs::copy(file, folder.join(file))?;
     }
