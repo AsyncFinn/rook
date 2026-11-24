@@ -146,8 +146,11 @@ pub struct DataModel {
     new_scripts: scripts::NewScripts,
     /// What a server fills the legacy chat in from.
     core_scripts: Option<Arc<core_scripts::CorePatch>>,
-    /// Where render-relevant changes have been checked up to.
-    render_watch: JournalWatch,
+    /// Where render-relevant changes have been checked up to: `None` until
+    /// a renderer first asks for them, so a DataModel nothing draws (a
+    /// server with clients, a headless one) reads none of the journal for
+    /// drawing and keeps no changes nobody takes.
+    render_watch: Option<JournalWatch>,
     /// What a renderer draws that changed since it last asked.
     render_changes: RenderChanges,
     /// Each adornment's Adornee as last seen, whose look changes when
@@ -241,7 +244,9 @@ impl DataModel {
     pub fn reset_cursors(&mut self) {
         let end = self.runtime.world().dom.journal().end();
         self.new_scripts = scripts::NewScripts::starting_at(end);
-        self.render_watch.rescan(end);
+        if let Some(watch) = &mut self.render_watch {
+            watch.rescan(end);
+        }
         self.render_changes = RenderChanges::everything();
         self.sounds.watch.rescan(end);
         self.sounds.hearing.get_mut().rescan(end);
@@ -299,13 +304,26 @@ impl DataModel {
         self.check_user_settings();
     }
 
+    /// Whether a renderer draws this DataModel (it has taken its render
+    /// changes).
+    pub(crate) fn drawn(&self) -> bool {
+        self.render_watch.is_some()
+    }
+
     pub fn runtime(&self) -> &Runtime {
         &self.runtime
     }
 
     /// What changed for a renderer since the last call, including changes
     /// made between frames (by the caller).
+    /// The first call starts the reading: its first look takes in the
+    /// whole tree, and the changes say to draw everything.
     pub fn take_render_changes(&mut self) -> RenderChanges {
+        if self.render_watch.is_none() {
+            let end = self.runtime.world().dom.journal().end();
+            self.render_watch = Some(JournalWatch::starting_at(end));
+            self.render_changes = RenderChanges::everything();
+        }
         self.check_render_changes();
         std::mem::take(&mut self.render_changes)
     }

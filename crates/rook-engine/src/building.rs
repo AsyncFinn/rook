@@ -123,7 +123,7 @@ impl DataModel {
             run_service,
             new_scripts: scripts::NewScripts::starting_at(cursor),
             core_scripts: options.core_scripts.clone(),
-            render_watch: JournalWatch::starting_at(cursor),
+            render_watch: None,
             render_changes: RenderChanges::everything(),
             adorned: Default::default(),
             material_parts: Default::default(),

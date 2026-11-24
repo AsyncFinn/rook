@@ -249,6 +249,9 @@ impl ServerHost {
                 }
                 out.push((last, ToClient::Effects(calls)));
             }
+        } else if !self.server.drawn() {
+            // No client and no renderer of its own: nobody draws them.
+            self.server.runtime().world_mut().effect_calls.clear();
         }
         // A server script's activation reaches the client whose character
         // holds the Tool.

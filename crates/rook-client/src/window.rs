@@ -369,7 +369,7 @@ impl App {
         self.return_cursor();
         self.follow_mouse_lock();
         self.draw(drawn);
-        if let Some(title) = self.readout.frame(elapsed, &self.game)
+        if let Some(title) = self.readout.frame(elapsed, &mut self.game)
             && let Some(gfx) = &self.gfx
         {
             gfx.window.set_title(&format!("{}  |  {title}", self.title));

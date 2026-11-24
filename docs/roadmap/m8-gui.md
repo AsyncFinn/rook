@@ -98,8 +98,8 @@ health bars and leaderboards are GUI.
    list, backpack, health bar, ProximityPrompts (157 files), the legacy
    Dialog (352 files), `Kick` and error prompts, and what they answer:
    `SetCoreGuiEnabled` (1,295 files), `SetCore` (868) and `GetCore`
-   (472). Piece by piece, Roblox's real CoreGui works in Rook first, then
-   Rook's own copy of it.
+   (472). Piece by piece, Roblox's real CoreScripts work in Rook first,
+   then Rook's own CoreScripts take their place.
    - *Scope*:
      - Roblox's real CoreScripts, from the user's install at runtime and
        never shipped (see the
@@ -118,10 +118,19 @@ health bars and leaderboards are GUI.
        Custom). Services that ask
        Roblox's website (friends, purchases, analytics, voice) do
        nothing locally.
-     - Rook's own CoreGui, in Luau and shipped: each piece laid out,
-       colored and animated as Roblox's, with values from `--dump` of the
-       real one, and behaving as it does; Rook's own logo and icons at
-       the same sizes, never Roblox's art.
+     - Rook's own CoreScripts, shipped: a package of Luau modules built
+       on React-Lua (vendored at a pinned version, its license kept), one
+       piece per CoreScript (the top bar and menu first) sharing one set
+       of components and one owner for `SetCore` and `GetCore`.
+       `cargo xtask` compiles it into an `.rbxm` shipped beside the exe,
+       which the loader reads in place of Roblox's patch. Each piece is
+       laid out, colored and animated as Roblox's, every value from a
+       recorded dump of Roblox's running in Studio, and behaves as it
+       does. Icons are Roblox's Builder Icons font from the user's
+       install or content packages, never shipped; Rook's logo takes the
+       place of Roblox's at the same size. Built on the
+       `feat/own-corescripts` branch and landed on `main` as one reviewed
+       change.
    - *Evidence*: what the CoreScripts call that Rook lacks is listed on
      [the behavior page](../behavior/gui/core-scripts.md#what-rook-lacks),
      from running them.
@@ -134,7 +143,7 @@ health bars and leaderboards are GUI.
      working ProximityPrompts and Dialogs, and hides what its scripts
      turn off, with Roblox's CoreScripts and with Rook's own; each piece
      of Rook's matches Roblox's in Rook's screenshots within step 4's
-     tolerance, but for the art.
+     tolerance, but for the logo.
 10. **Chat**: TextChatService and what the archive's scripts expect of
    the legacy Chat service (`Chat:Chat` bubbles in 561 files, `Chatted`
    handlers in about 830).

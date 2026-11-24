@@ -23,6 +23,12 @@ impl Times {
         self.samples.clear();
     }
 
+    /// Add `other`'s samples after these.
+    #[cfg(feature = "window")]
+    pub(crate) fn append(&mut self, other: &Times) {
+        self.samples.extend_from_slice(&other.samples);
+    }
+
     #[cfg(feature = "window")]
     pub(crate) fn is_empty(&self) -> bool {
         self.samples.is_empty()
