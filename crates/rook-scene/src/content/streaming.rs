@@ -116,7 +116,7 @@ fn size_for(pixels: f32) -> u8 {
 
 /// The images a part's surface draws that stream, and how many studs
 /// across each covers once (its longer side): a decal its face, a texture
-/// one tile (no more than the face), a mesh's texture and a decal through
+/// one tile (even one larger than the face), a mesh's texture and a decal through
 /// its UVs the whole part.
 fn surface_images(part: &PartInstance) -> [Option<(ImageHash, f32)>; 2] {
     let whole = || {
@@ -138,9 +138,10 @@ fn surface_images(part: &PartInstance) -> [Option<(ImageHash, f32)>; 2] {
         } => {
             let studs = match placement {
                 ImagePlacement::Face(n) => face(n).max_element(),
-                ImagePlacement::Tiled(n, tiling) => {
-                    tiling.studs_per_tile.abs().min(face(n)).max_element()
-                }
+                // One tile, however it compares to the face: a tile larger
+                // than the face shows only part of the image, magnified
+                // (a sprite sheet cell on a small part).
+                ImagePlacement::Tiled(_, tiling) => tiling.studs_per_tile.abs().max_element(),
                 ImagePlacement::MeshUv => whole(),
             };
             Some((image, studs))
@@ -180,6 +181,35 @@ mod tests {
         .map(size_for)
         .to_vec();
         assert_eq!(sizes, [6, 6, 7, 8, 9, 10, 11, 12, 12]);
+    }
+
+    #[test]
+    fn a_texture_is_sized_by_its_tile_even_past_the_face() {
+        // DB2's icons: a 1-stud part showing one 120-pixel cell of a
+        // 4096-pixel sheet, its tile 34 studs across.
+        let tiled = |studs: f32| {
+            let mut part = PartInstance::plain(
+                DrawShape::Part(rook_types::PartShape::Block),
+                Vec3::ZERO,
+                glam::Mat3::IDENTITY,
+                Vec3::new(1.0, 1.0, 0.001),
+            );
+            part.layer = Layer::Image {
+                image: ImageHash([1; 32]),
+                placement: ImagePlacement::Tiled(
+                    NormalId::Front,
+                    rook_types::Tiling {
+                        studs_per_tile: Vec2::splat(studs),
+                        offset: Vec2::ZERO,
+                    },
+                ),
+                z: 0,
+                on_transparent: false,
+            };
+            surface_images(&part)[0].map(|(_, studs)| studs)
+        };
+        assert_eq!(tiled(34.0), Some(34.0));
+        assert_eq!(tiled(0.25), Some(0.25), "repeated over the face");
     }
 
     #[test]
