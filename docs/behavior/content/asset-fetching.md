@@ -212,9 +212,11 @@ found", 409 "User is not authorized to access Asset." (not public), or
 "Authentication required to access Asset." (public, but now behind an
 account), and lookups by asset version id are refused as deprecated. The
 Open Cloud endpoint refuses requests without a key. Rook asks anonymously
-and tries a user's key (`rook key set`) only for refused assets;
-that path is untested for lack of a key, and whether a key opens other
-creators' public assets is unknown. Roblox's own 2009 assets (the table
+and tries a user's key (`rook key set`) only for refused assets. Tested
+on 2026-11-23 with a key holding only `legacy-asset:manage`: it opens other
+creators' public images that anonymous requests are refused ("Authentication
+required"), and the upload it gives for one of them, a 4096 × 4096 decal,
+is a 1024 × 1024 PNG; its transcode is 4096 (see Textures below). Roblox's own 2009 assets (the table
 above) come anonymously.
 
 *Results* (`cargo xtask content --place`, first run, network on):
@@ -255,7 +257,10 @@ and `doNotFallbackToBaselineRepresentation` per item and answers each with
 a `location` and the `contentRepresentationSpecifier` it matched, so
 several can be asked at once; `/v2/assetId` ignores the list and always
 answers `source`. Asked anonymously, it answers for the images `source`
-does.
+does. Open Cloud's `asset-delivery-api/v1/assetId/<id>` (with a key) takes
+`contentRepresentationPriorityList` and
+`doNotFallbackToBaselineRepresentation` in its query and answers as a batch
+item does, one pack a request.
 
 What comes is a KTX2 file of BC1 (`vkFormat` 131, opaque) or BC3 (137)
 blocks, each level Zstandard-compressed, smallest level first, with
@@ -293,9 +298,10 @@ Rook does the same for any asset id it loads as an image (`Want::Image`):
 pack 0 through the batch endpoint, then every other pack in one more batch
 request, joined into one KTX2 file of every level that is cached under
 `asset-<id>-ktx2` and drawn in its blocks. It fetches every pack rather
-than streaming them by size on screen. When there is no transcode
-(refused anonymously, not an image, still being made) it falls back to the
-upload as before; a refusal is remembered like other failures, a transcode
+than streaming them by size on screen. Refused anonymously, with a key
+saved, it fetches each pack from Open Cloud instead (a 4096 texture's six
+in about 4 s). When there is no transcode (refused, not an image, still
+being made) it falls back to the upload as before; a refusal is remembered like other failures, a transcode
 being made is asked for again next run. Kept assets stay as kept. The
 upload is decoded up to 4096 a side, and kept in blocks past 1024.
 

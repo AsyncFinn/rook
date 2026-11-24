@@ -152,9 +152,10 @@ impl Resolver {
     /// textures ([`Delivery::fetch_texture`]), from the cache (kept under
     /// its own key, beside the upload) or asset delivery; else the upload
     /// ([`Self::download`]). A kept asset stays as it was kept. Where there
-    /// is no transcode (not an image, refused without an account) that is
-    /// remembered like any failure, so later runs go straight to the
-    /// upload; one Roblox is still making is asked for again next run.
+    /// is no transcode (not an image, refused without an account and no
+    /// key) that is remembered like any failure, so later runs go straight
+    /// to the upload, until a key is saved; one Roblox is still making is
+    /// asked for again next run.
     pub(super) fn download_texture(&self, r: &ContentRef) -> Result<Fetched, Failure> {
         let ContentRef::Asset { id, version } = r else {
             return self.download(r);
@@ -173,6 +174,10 @@ impl Resolver {
                     format!("{} {url}", path.display()),
                 ));
             }
+            // An anonymous refusal doesn't stand once there is a key to try.
+            Some(Cached::Failed(f))
+                if f.kind == FailureKind::Forbidden
+                    && self.delivery.as_ref().is_some_and(|d| d.key().is_some()) => {}
             Some(Cached::Failed(_)) => return self.download(r),
             Some(Cached::Miss) | None => {}
         }

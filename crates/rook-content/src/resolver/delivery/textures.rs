@@ -5,7 +5,9 @@
 //! smallest levels and names every pack's levels; Rook fetches it, then
 //! the rest in one batch request, and joins them into one file
 //! ([`ktx2::join`]). Roblox's client fetches the larger packs only as a
-//! texture grows on screen; Rook fetches them all.
+//! texture grows on screen; Rook fetches them all. Images refused
+//! anonymously come pack by pack from Open Cloud's asset delivery with the
+//! user's key, which takes the same representation list.
 
 use std::sync::atomic::Ordering;
 
@@ -15,7 +17,7 @@ use rook_platform::network::Request;
 use serde_json::{Value, json};
 
 use super::web::{self, failure_kind};
-use super::{Asset, Delivery, MAX_BYTES};
+use super::{Asset, Delivery, MAX_BYTES, OPEN_CLOUD};
 use crate::decode::image::ktx2;
 use crate::{Failure, FailureKind};
 
@@ -73,9 +75,68 @@ impl Delivery {
         })
     }
 
-    /// These packs of an image, in that order: one batch request for
-    /// their locations, then each from the CDN.
+    /// These packs of an image, in that order: anonymously through the
+    /// batch endpoint, or, where that's refused and the user saved an Open
+    /// Cloud key, one by one from Open Cloud.
     fn packs(&self, id: u64, version: Option<u32>, packs: &[u8]) -> Result<Vec<Asset>, Failure> {
+        match self.batch_packs(id, version, packs) {
+            Err(f) if f.kind == FailureKind::Forbidden => match self.key() {
+                Some(key) => packs
+                    .iter()
+                    .map(|&p| self.open_cloud_pack(id, version, p, key))
+                    .collect(),
+                None => Err(f),
+            },
+            result => result,
+        }
+    }
+
+    /// One pack from Open Cloud's asset delivery, with the user's key: the
+    /// list goes in the query, and the answer is a batch item's.
+    fn open_cloud_pack(
+        &self,
+        id: u64,
+        version: Option<u32>,
+        pack: u8,
+        key: &str,
+    ) -> Result<Asset, Failure> {
+        let path = match version {
+            Some(v) => format!("{id}/version/{v}"),
+            None => id.to_string(),
+        };
+        let list = priority_list(pack)
+            .replace('+', "%2B")
+            .replace('/', "%2F")
+            .replace('=', "%3D");
+        let url = format!(
+            "{OPEN_CLOUD}/{path}?contentRepresentationPriorityList={list}&doNotFallbackToBaselineRepresentation=true"
+        );
+        let response = web::send(&Request {
+            method: "GET",
+            url: &url,
+            headers: &[("x-api-key", key)],
+            body: &[],
+            max_bytes: MAX_BYTES,
+        })?;
+        let answer: Value = serde_json::from_slice(&response.body).map_err(|_| {
+            Failure::new(
+                FailureKind::Network,
+                format!(
+                    "HTTP {}: unexpected answer from {OPEN_CLOUD}",
+                    response.status
+                ),
+            )
+        })?;
+        pack_from(&answer, response.status)
+    }
+
+    /// Their locations in one batch request, then each from the CDN.
+    fn batch_packs(
+        &self,
+        id: u64,
+        version: Option<u32>,
+        packs: &[u8],
+    ) -> Result<Vec<Asset>, Failure> {
         if !self.batch_works.load(Ordering::Relaxed) {
             return Err(Failure::new(
                 FailureKind::Network,
@@ -126,23 +187,29 @@ impl Delivery {
                     .iter()
                     .find(|a| a["requestId"].as_str().and_then(|r| r.parse().ok()) == Some(*p))
                     .ok_or_else(unexpected)?;
-                let location = answer["location"]
-                    .as_str()
-                    .filter(|_| answer["contentRepresentationSpecifier"].is_object());
-                match location {
-                    Some(location) => Ok(Asset {
-                        bytes: web::download(location, MAX_BYTES)?,
-                        url: location.split('?').next().unwrap_or("").to_owned(),
-                        version: None,
-                    }),
-                    None => Err(answer_failure(answer, response.status)),
-                }
+                pack_from(answer, response.status)
             })
             .collect()
     }
 }
 
-/// Why a batch answer has no location.
+/// A pack from asset delivery's answer for it: its bytes from the CDN
+/// where it names the representation it matched, else why not.
+fn pack_from(answer: &Value, status: u16) -> Result<Asset, Failure> {
+    let location = answer["location"]
+        .as_str()
+        .filter(|_| answer["contentRepresentationSpecifier"].is_object());
+    match location {
+        Some(location) => Ok(Asset {
+            bytes: web::download(location, MAX_BYTES)?,
+            url: location.split('?').next().unwrap_or("").to_owned(),
+            version: None,
+        }),
+        None => Err(answer_failure(answer, status)),
+    }
+}
+
+/// Why an answer has no location.
 fn answer_failure(answer: &Value, status: u16) -> Failure {
     let error = &answer["errors"][0];
     let message = error["message"].as_str().unwrap_or("no texture").to_owned();
