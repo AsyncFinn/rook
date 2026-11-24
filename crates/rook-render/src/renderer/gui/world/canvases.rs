@@ -196,6 +196,13 @@ impl WorldGui {
         self.ids.free(id..id + 1);
     }
 
+    /// Drop the frames' bind groups of `hash`'s image, which was replaced.
+    pub(crate) fn forget_file(&mut self, hash: ImageHash) {
+        if let Some(frames) = &mut self.frames {
+            (frames.groups).retain(|key, _| !is_file(*key, hash));
+        }
+    }
+
     /// Drop the bind groups of groups' textures, which were drawn anew.
     pub(crate) fn forget_groups(&mut self) {
         if let Some(frames) = &mut self.frames {

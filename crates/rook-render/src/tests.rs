@@ -8,6 +8,7 @@ use super::*;
 
 mod glass;
 mod gui;
+mod images;
 mod lighting;
 mod maps;
 mod parts;

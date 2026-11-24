@@ -34,6 +34,19 @@ impl Renderer {
         }
     }
 
+    /// Take larger versions of images the scene handed over before (a
+    /// streamed image's later levels), each in place of its hash's. One
+    /// already on the GPU keeps drawing until its replacement goes up, as
+    /// other uploads do; from the next frame on, everything that draws the
+    /// hash draws the new one, where it was placed. One not on the GPU yet
+    /// is swapped, and one never handed over is taken as
+    /// [`Renderer::take_images`] takes it.
+    pub fn replace_images(&mut self, images: impl IntoIterator<Item = (ImageHash, Arc<Image>)>) {
+        for (hash, image) in images {
+            self.images.replace(hash, image);
+        }
+    }
+
     /// Draw the Head MeshType with this mesh (the user's own `head.mesh`)
     /// instead of Rook's. It must be the head at its own size, as Roblox's
     /// file is.

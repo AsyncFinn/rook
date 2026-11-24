@@ -27,7 +27,7 @@ use rook_types::{Viewer, WorldCanvas, WorldPlace};
 use wesl_core::include_wesl;
 
 use super::super::*;
-use super::images::{GuiImages, ImageKey, Run, image_entries, runs};
+use super::images::{GuiImages, ImageKey, Run, image_entries, is_file, runs};
 use super::{GpuQuad, Held, Packed};
 use crate::gpu::pool::RangeAlloc;
 use crate::renderer::draws::runs::multi_draw;

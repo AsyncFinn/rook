@@ -158,6 +158,11 @@ impl GuiImages {
         self.group_views = views;
     }
 
+    /// Drop the bind groups of `hash`'s image, whatever their sampler.
+    pub(crate) fn forget_file(&mut self, hash: ImageHash) {
+        self.groups.retain(|key, _| !is_file(*key, hash));
+    }
+
     /// The view and sampler `key` draws with, once its image is on the GPU.
     pub(crate) fn view<'a>(
         &'a self,
@@ -216,6 +221,11 @@ impl GuiImages {
     pub(crate) fn group(&self, key: Option<ImageKey>) -> Option<&wgpu::BindGroup> {
         self.groups.get(&key)
     }
+}
+
+/// Whether `key` is `hash`'s image, with any sampler.
+pub(crate) fn is_file(key: Option<ImageKey>, hash: ImageHash) -> bool {
+    matches!(key, Some(ImageKey::File { hash: h, .. }) if h == hash)
 }
 
 /// An image and its sampler, at `first` and the binding after it.
