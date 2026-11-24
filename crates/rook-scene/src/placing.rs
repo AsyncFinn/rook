@@ -137,10 +137,11 @@ impl SceneCache {
             floor_wires: &mut floor_wires,
             floors: &floors,
         };
-        let mut images = |id: InstanceId, url: &str| match self.file_state(id, url, Want::Image) {
-            FileState::Loaded(hash) => Some(ImageHash(hash)),
-            FileState::Loading | FileState::Failed => None,
-        };
+        let mut images =
+            |id: InstanceId, url: &str| match self.file_state(id, url, Want::WHOLE_TEXTURE) {
+                FileState::Loaded(hash) => Some(ImageHash(hash)),
+                FileState::Loading | FileState::Failed => None,
+            };
         let out = f(&mut cache, drawn, &mut images);
         self.effects = cache;
         self.scene.emitters = emitters;

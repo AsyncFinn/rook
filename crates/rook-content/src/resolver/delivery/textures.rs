@@ -2,10 +2,10 @@
 //! (`source`) but a KTX2 transcode of it in BC1 or BC3 blocks, split in
 //! mip packs, each a file of its own on the CDN
 //! (`docs/behavior/content/asset-fetching.md#textures`). Pack 0 holds the
-//! smallest levels and names every pack's levels; Rook fetches it, then
-//! the rest in one batch request, and joins them into one file
-//! ([`ktx2::join`]). Roblox's client fetches the larger packs only as a
-//! texture grows on screen; Rook fetches them all. Images refused
+//! smallest levels and names every pack's levels; larger packs are
+//! fetched as a texture grows on screen, several in one batch request, and
+//! the resolver joins the ones it has into one file (`ktx2::join`,
+//! `Resolver::download_texture`). Images refused
 //! anonymously come pack by pack from Open Cloud's asset delivery with the
 //! user's key, which takes the same representation list.
 
@@ -18,7 +18,6 @@ use serde_json::{Value, json};
 
 use super::web::{self, failure_kind};
 use super::{Asset, Delivery, MAX_BYTES, OPEN_CLOUD};
-use crate::decode::image::ktx2;
 use crate::{Failure, FailureKind};
 
 /// The representation Studio 0.748 asks for (seen in its requests):
@@ -49,36 +48,25 @@ fn priority_list(pack: u8) -> String {
 }
 
 impl Delivery {
-    /// An image as Roblox transcodes it for textures, every mip pack
-    /// joined into one KTX2 file. Fails when there is no such
-    /// representation (not an image, refused anonymously) or it isn't
-    /// made yet ([`FailureKind::Network`]: Roblox makes it on the first
-    /// request, and it's there seconds later); the caller falls back to
-    /// the upload.
-    pub fn fetch_texture(&self, id: u64, version: Option<u32>) -> Result<Asset, Failure> {
-        let invalid = |e: &dyn std::fmt::Display| Failure::new(FailureKind::Invalid, e.to_string());
-        let mut packs = self.packs(id, version, &[0])?;
-        let layout = ktx2::File::read(&packs[0].bytes)
-            .map_err(|e| invalid(&e))?
-            .packs();
-        let rest: Vec<u8> = (1..layout.len().min(MAX_PACKS)).map(|p| p as u8).collect();
-        if !rest.is_empty() {
-            packs.extend(self.packs(id, version, &rest)?);
-        }
-        let files: Vec<&[u8]> = packs.iter().map(|p| p.bytes.as_slice()).collect();
-        let bytes = ktx2::join(&files).map_err(|e| invalid(&e))?;
-        let first = packs.swap_remove(0);
-        Ok(Asset {
-            bytes,
-            url: first.url,
-            version: None,
-        })
-    }
-
-    /// These packs of an image, in that order: anonymously through the
-    /// batch endpoint, or, where that's refused and the user saved an Open
-    /// Cloud key, one by one from Open Cloud.
-    fn packs(&self, id: u64, version: Option<u32>, packs: &[u8]) -> Result<Vec<Asset>, Failure> {
+    /// These mip packs of an image as Roblox transcodes it for textures,
+    /// in that order: anonymously through the batch endpoint, or, where
+    /// that's refused and the user saved an Open Cloud key, one by one from
+    /// Open Cloud. Fails when there is no such representation (not an
+    /// image, refused) or it isn't made yet ([`FailureKind::Network`]:
+    /// Roblox makes it on the first request, and it's there seconds later);
+    /// the caller falls back to the upload.
+    pub fn texture_packs(
+        &self,
+        id: u64,
+        version: Option<u32>,
+        packs: &[u8],
+    ) -> Result<Vec<Asset>, Failure> {
+        let packs: Vec<u8> = packs
+            .iter()
+            .copied()
+            .filter(|&p| usize::from(p) < MAX_PACKS)
+            .collect();
+        let packs = packs.as_slice();
         match self.batch_packs(id, version, packs) {
             Err(f) if f.kind == FailureKind::Forbidden => match self.key() {
                 Some(key) => packs

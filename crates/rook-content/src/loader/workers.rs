@@ -19,7 +19,7 @@ pub(super) fn needs_decoding(want: Want, fetched: &Fetched) -> bool {
     match want {
         Want::Bytes => false,
         // Material textures come decoded.
-        Want::Image => fetched.image.is_none(),
+        Want::Image | Want::Texture(_) => fetched.image.is_none(),
         Want::Mesh | Want::Audio | Want::Model => true,
     }
 }
@@ -39,7 +39,7 @@ pub(super) fn decode(want: Want, mut fetched: Fetched) -> Outcome {
             })?;
             fetched.mesh = Some(Arc::new(mesh));
         }
-        Want::Image => {
+        Want::Image | Want::Texture(_) => {
             profiling::scope!("decode image");
             let image = Image::decode_texture(&fetched.bytes).map_err(|e| invalid(&e))?;
             fetched.image = Some(Arc::new(image));

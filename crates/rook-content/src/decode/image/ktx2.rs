@@ -141,6 +141,19 @@ impl<'a> File<'a> {
             .collect()
     }
 
+    /// How many packs past pack 0 make the texture at least `side` pixels
+    /// across (its largest level's longer side), or all of them: what to
+    /// fetch for a texture that size on screen. 0 when it isn't in packs.
+    pub(crate) fn packs_up_to(&self, side: u32) -> u8 {
+        let (width, height) = self.texture_size();
+        let packs = self.packs();
+        let last = packs.len().saturating_sub(1);
+        packs
+            .iter()
+            .position(|&(first, _)| (width.max(height) >> first.min(31)) >= side)
+            .unwrap_or(last) as u8
+    }
+
     /// The whole texture's size when this file is one of its packs
     /// (`transcodedWidth`, `transcodedHeight`), else the file's own.
     fn texture_size(&self) -> (u32, u32) {
@@ -243,10 +256,12 @@ fn key_values(kvd: &[u8]) -> Vec<(&[u8], &[u8])> {
     out
 }
 
-/// One file of every level of a texture from its packs (in any order):
+/// One file of a texture's levels from some of its packs (in any order):
 /// each pack's levels as they are stored, the first pack's format
 /// descriptor, and its key-value data without the pack keys. The packs
-/// must be one texture's, between them holding every level once.
+/// must be one texture's, between them holding each level from their
+/// largest down to 1 × 1 once: pack 0 alone, or pack 0 to pack `n`, which
+/// make the texture at the size pack `n` starts at.
 pub(crate) fn join(packs: &[&[u8]]) -> Result<Vec<u8>, ImageError> {
     let files = packs
         .iter()
@@ -282,10 +297,17 @@ pub(crate) fn join(packs: &[&[u8]]) -> Result<Vec<u8>, ImageError> {
             }
         }
     }
-    let levels = levels
-        .into_iter()
+    let top = levels
+        .iter()
+        .position(Option::is_some)
+        .ok_or_else(|| damaged("no levels"))?;
+    let levels = levels[top..]
+        .iter()
+        .copied()
         .collect::<Option<Vec<_>>>()
         .ok_or_else(|| damaged("a level no pack holds"))?;
+    let count = levels.len();
+    let (width, height) = ((width >> top).max(1), (height >> top).max(1));
 
     let mut kvd = Vec::new();
     for (key, value) in &first.kv {
@@ -554,10 +576,33 @@ pub(crate) mod tests {
         }
     }
 
+    /// The packs a texture needs to be a size: pack 0 up to the first that
+    /// reaches it, or all of them.
+    #[test]
+    fn picks_the_packs_for_a_size() {
+        let [tail, _] = packs16();
+        let file = File::read(&tail).unwrap();
+        let picks: Vec<u8> = [1, 4, 5, 16, 64].map(|s| file.packs_up_to(s)).to_vec();
+        assert_eq!(picks, [0, 0, 1, 1, 1]);
+        assert_eq!(File::read(&bc1(0, "x", false)).unwrap().packs_up_to(64), 0);
+    }
+
+    /// Pack 0 alone joins into the texture's smaller version.
+    #[test]
+    fn joins_the_smallest_pack_alone() {
+        let [tail, _] = packs16();
+        let joined = join(&[&tail]).unwrap();
+        let file = File::read(&joined).unwrap();
+        assert_eq!((file.width, file.height), (4, 4));
+        assert_eq!(file.original_size(), Some((20, 20)));
+        let (_, mips) = file.chain().unwrap().unwrap();
+        assert_eq!(mips, (2..5).map(level16).collect::<Vec<_>>());
+    }
+
     #[test]
     fn refuses_incomplete_or_mixed_packs() {
         let [tail, top] = packs16();
-        assert!(join(&[&tail]).is_err(), "missing the top pack");
+        assert!(join(&[&top]).is_err(), "missing the smallest levels");
         assert!(join(&[&tail, &tail]).is_err(), "a level twice");
         let other = bc1(0, "x", false);
         assert!(join(&[&tail, &other]).is_err());

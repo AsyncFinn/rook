@@ -128,6 +128,7 @@ impl Launch {
             refresh_read: None,
             loop_ran: false,
             undrawable: false,
+            view_size: (1, 1),
             install: self.install.take().expect("started once"),
             framerate_cap: options.framerate_cap,
             readout: Readout::new(options.frame_times),

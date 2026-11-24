@@ -142,6 +142,7 @@ impl App {
             self.undrawable = !gfx.frames.get().resize(size.width, size.height);
             if !self.undrawable {
                 self.game.set_viewport(size.width, size.height);
+                self.view_size = (size.width, size.height);
             }
         }
         if let Some(gfx) = &self.gfx

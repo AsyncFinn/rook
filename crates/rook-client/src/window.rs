@@ -117,6 +117,8 @@ pub(crate) struct App {
     /// The window has nothing to draw into (it's minimized). Presenting
     /// paces frames shown at the display's rate, so then nothing would.
     pub(crate) undrawable: bool,
+    /// The window's size in pixels, which textures are sized on screen by.
+    pub(crate) view_size: (u32, u32),
     pub(crate) cursor_shown: cursor::Shown,
     /// The platform's input method is on, while a TextBox has focus.
     pub(crate) ime: bool,
@@ -197,6 +199,7 @@ impl App {
         self.scene.show_all(surface.renderer_mut());
         let (width, height) = surface.size();
         self.game.set_viewport(width, height);
+        self.view_size = (width, height);
         self.gfx = Some(gfx);
         self.read_refresh();
     }
@@ -323,6 +326,8 @@ impl App {
         // The scene follows the step here, while the render thread may
         // still be drawing the frame before.
         let scene = self.gfx.is_some().then(|| {
+            let (width, height) = self.view_size;
+            self.scene.set_view(&self.camera.camera, width, height);
             let camera = self.camera.camera.position;
             self.scene.update(self.game.view_mut(), camera)
         });

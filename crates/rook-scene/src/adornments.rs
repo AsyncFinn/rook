@@ -44,7 +44,7 @@ impl SceneCache {
     pub(super) fn adornments(&mut self, dom: &Dom, id: InstanceId) -> Vec<(PartInstance, Pose)> {
         let wires = std::mem::take(&mut self.wire_lines);
         let floors = std::mem::take(&mut self.floors);
-        let mut image = |url: &str| match self.file_state(id, url, Want::Image) {
+        let mut image = |url: &str| match self.file_state(id, url, Want::WHOLE_TEXTURE) {
             FileState::Loaded(hash) => Some(Some(ImageHash(hash))),
             FileState::Failed => Some(None),
             FileState::Loading => None,

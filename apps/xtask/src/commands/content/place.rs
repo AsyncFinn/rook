@@ -24,7 +24,7 @@ impl Use {
     fn wants(&self, want: Want) -> usize {
         match want {
             Want::Mesh => self.mesh,
-            Want::Image => self.image,
+            Want::Image | Want::Texture(_) => self.image,
             Want::Audio => self.audio,
             // No property holds a model scripts load.
             Want::Bytes | Want::Model => 0,
@@ -146,7 +146,7 @@ fn collect_uses(dom: &rbx_dom_weak::WeakDom) -> BTreeMap<String, Use> {
             u.count += 1;
             match property_want(&inst.class, key) {
                 Want::Mesh => u.mesh += 1,
-                Want::Image => u.image += 1,
+                Want::Image | Want::Texture(_) => u.image += 1,
                 Want::Audio => u.audio += 1,
                 Want::Bytes | Want::Model => {}
             }

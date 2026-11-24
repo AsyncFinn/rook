@@ -285,22 +285,28 @@ mobile GPUs. A 4096 × 4096 upload (BC3) comes in six:
 A 1024 × 1024 one comes in four (64 and below, 256 and 128, 512, 1024), a
 256 × 256 one in two. Sizes that aren't powers of two are rounded down for
 the transcode (a 1264 × 632 upload is 1216 × 576). Studio fetches pack 0
-first, then each next pack only as the texture grows on screen and memory
-allows (`TextureStreaming` budget), so a texture filling the view reaches
-4096 in about five seconds. An image not transcoded yet answers 406
+first, then larger packs only as the texture grows on screen
+([streaming](#streaming)). An image not transcoded yet answers 406
 "Asset content representation is being generated" (`customErrorCode` 21)
 and Roblox starts making it: Studio retries after two seconds, then draws
 the upload (`[{"format":"Original","majorVersion":"Original","fidelity":"Original"}]`,
 up to its full size: one was a 2048 × 2048 JPEG). A pack the texture
 doesn't have answers the same 406; a mesh asked for as a texture, 404.
 
-Rook does the same for any asset id it loads as an image (`Want::Image`):
-pack 0 through the batch endpoint, then every other pack in one more batch
-request, joined into one KTX2 file of every level that is cached under
-`asset-<id>-ktx2` and drawn in its blocks. It fetches every pack rather
-than streaming them by size on screen. Refused anonymously, with a key
-saved, it fetches each pack from Open Cloud instead (a 4096 texture's six
-in about 4 s). When there is no transcode (refused, not an image, still
+Only images on surfaces in the world come this way: Studio asked for
+transcodes for Decals, mesh textures and ParticleEmitter textures, and for
+the upload (`/v1/asset?id=<id>`, nothing more) for ImageLabels and Sky
+faces, which it drew whole at once, without streaming.
+
+Rook does the same for any asset id it loads as a texture
+(`Want::Texture(n)`: Decals, Textures, mesh textures, effects and
+adornments): pack 0 through the batch endpoint, then the larger packs it
+needs, several in one batch request, joined into one KTX2 file of their
+levels and drawn in its blocks. Each pack is cached on its own
+(`asset-<id>-ktx2-p<n>`), so a texture growing on screen fetches only the
+packs it adds. Refused anonymously, with a key saved, it fetches each pack
+from Open Cloud instead (a 4096 texture's six in about 4 s). GUI images,
+the sky and SurfaceAppearance maps come as uploaded (`Want::Image`). When there is no transcode (refused, not an image, still
 being made) it falls back to the upload as before; a refusal is remembered like other failures, a transcode
 being made is asked for again next run. Kept assets stay as kept. The
 upload is decoded up to 4096 a side, and kept in blocks past 1024.
@@ -311,7 +317,47 @@ the aspect kept (Studio 0.748, ImageLabels of 400 × 200 or 300 × 300 over
 a magenta background): with a 4096 × 4096 upload a 512 × 512 rect showed
 its top-left quarter, and with a 1264 × 632 upload (served 1216 × 576) a
 1024 × 512 rect showed the whole image while 632 × 316 showed part of it.
-Rook halved images past 1024, which measured that one as 632 × 316.
+Rook halved images past 1024, which measured that one as 632 × 316. That
+size is the upload's as Roblox stores it: Open Cloud's upload of the
+4096 × 4096 decal is a 1024 × 1024 PNG, which is what ImageLabels draw.
+
+## Streaming
+
+Checked against Studio 0.748 on 2026-11-23: a 16 × 16 stud decal of a
+4096 × 4096 image in a second Studio logging `FLogTextureManager2Residency`,
+the camera (`Scriptable`, 70°, a 1760 × 990 view) stopped for five seconds
+at each distance in turn, nearer each time:
+
+| Distance (studs) | Decal across (pixels) | Level Studio wanted | Its size |
+|---:|---:|---:|---:|
+| 400 | 28 | 6 | 64 |
+| 200 | 57 | 6 | 64 |
+| 100 | 113 | 5 | 128 |
+| 50 | 226 | 4 | 256 |
+| 25 | 452 | 3 | 512 |
+| 12.5 | 905 | 2 | 1024 |
+| 8 | 1414 | 1 | 2048 |
+| 5 | 2262 | 0 | 4096 |
+
+So a texture is wanted at the smallest power of two at least as many
+pixels across as the surface takes on screen, and no smaller than 64. A
+1024 × 1024 decal (its color map, 9920484153) went the same way, to 1024
+at 940 pixels. Studio steps one level at a time (`setResidency resMinMip:4
+-> reqMinMip:3`), about 0.35 s each, fetching each pack as its first
+level is wanted. A texture out of view keeps its smallest pack (both
+decals sat at pack 0 while the camera looked elsewhere), and nothing
+shrank again: after 40 s far away and then looking away, the 4096 decal
+was still whole. Studio lowers textures only under memory pressure
+(`ReduceMipLevels`, `TextureStreaming` budget), which this didn't reach.
+
+Rook does the same ([`content/streaming.rs`](../../../crates/rook-scene/src/content/streaming.rs)):
+a texture loads at pack 0, and every few frames the scene sizes each
+texture in view on screen (a decal's face, a texture's tile, a mesh's
+texture over the whole part, seen from the part's nearest point) and asks
+for the packs that make it that large. The larger version replaces the
+smaller in the renderer under the same image, so nothing is placed again.
+A screenshot waits for the sizes its camera wants. Effects and adornments
+load whole. Rook never lowers a texture and has no memory budget.
 
 Thumbnails, `rbxthumb://` and the old `thumbs/`, `ThumbnailAsset.ashx` and `*-thumbnail/image` URLs, are in [thumbnails](thumbnails.md).
 

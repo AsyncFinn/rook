@@ -153,9 +153,10 @@ impl Resolver {
         self.resolve_as(r, Want::Bytes)
     }
 
-    /// Resolve a reference for `want`: an asset id wanted as an image comes
-    /// as Roblox transcodes it for textures where there is such a
-    /// transcode ([`Self::download_texture`]), else as uploaded.
+    /// Resolve a reference for `want`: an asset id wanted as a texture
+    /// ([`Want::Texture`]) comes as Roblox transcodes it for textures where
+    /// there is such a transcode ([`Self::download_texture`]), else as
+    /// uploaded.
     pub fn resolve_as(&self, r: &ContentRef, want: Want) -> Result<Fetched, Failure> {
         if let Some(f) = self.failed.lock().expect("failure memo").get(r) {
             return Err(f.clone());
@@ -271,8 +272,8 @@ impl Resolver {
                 "asset delivery isn't in the provider order",
             ));
         }
-        if want == Want::Image {
-            return self.download_texture(&asset);
+        if let Want::Texture(size) = want {
+            return self.download_texture(&asset, size);
         }
         self.download(&asset)
     }

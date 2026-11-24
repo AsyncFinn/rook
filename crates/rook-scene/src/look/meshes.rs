@@ -58,7 +58,7 @@ impl SceneCache {
         if url.is_empty() {
             return;
         }
-        match self.file_state(part, &url, Want::Image) {
+        match self.file_state(part, &url, Want::Texture(0)) {
             FileState::Loaded(hash) => {
                 out.texture = Some(ImageHash(hash));
                 out.color = tint;

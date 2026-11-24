@@ -38,6 +38,15 @@ impl SceneCache {
                 break;
             }
         }
+        // Textures at the size they take on screen from where the shot is.
+        let dom = &dm.runtime().world().dom;
+        loop {
+            self.stream_textures(true);
+            if self.files.idle() {
+                break;
+            }
+            self.poll_files(dom, true);
+        }
         self.update_terrain(camera, true);
         self.update_grass(camera);
     }
@@ -76,6 +85,7 @@ impl SceneCache {
     /// and the images it hasn't had.
     pub fn show_all(&mut self, renderer: &mut Renderer) {
         renderer.take_images(self.images.take_fresh());
+        renderer.replace_images(self.images.take_upgraded());
         renderer.set_scene(&self.scene);
         renderer.update_terrain_voxels(self.light_voxels());
     }
@@ -107,6 +117,7 @@ impl SceneCache {
         let change = self.apply_data_model(dm, changes);
         let dom = &dm.runtime().world().dom;
         self.follow_camera(dom, camera);
+        self.stream_textures(false);
         let mut loaded = self.poll_files(dom, false);
         loaded.extend(self.update_terrain(camera, false));
         loaded.extend(self.update_grass(camera));
@@ -130,6 +141,7 @@ impl SceneCache {
             effects: self.effects.take_changes(),
             dropped: self.take_dropped_meshes(),
             images: self.images.take_fresh(),
+            upgraded: self.images.take_upgraded(),
         }
     }
 }
@@ -183,6 +195,9 @@ pub struct ToRender {
     /// Images loaded since the last hand-over: the renderer takes their
     /// pixels, and the scene keeps none.
     images: Vec<(ImageHash, Arc<Image>)>,
+    /// Larger versions of images the renderer has (textures streaming
+    /// in), to replace them.
+    upgraded: Vec<(ImageHash, Arc<Image>)>,
 }
 
 impl ToRender {
@@ -193,6 +208,7 @@ impl ToRender {
             || !self.viewports.is_empty()
             || self.terrain.is_some()
             || !self.effects.is_empty()
+            || !self.upgraded.is_empty()
     }
 
     /// Give `renderer` the changes, reading them from `cache`, which
@@ -202,6 +218,7 @@ impl ToRender {
         let scene = &cache.scene;
         // First: what follows may draw them.
         renderer.take_images(self.images);
+        renderer.replace_images(self.upgraded);
         self.gui.apply(renderer);
         match &self.change {
             SceneChange::None => {}

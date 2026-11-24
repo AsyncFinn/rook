@@ -22,7 +22,7 @@ impl SceneCache {
             if url.is_empty() {
                 continue;
             }
-            let FileState::Loaded(hash) = self.file_state(id, &url, Want::Image) else {
+            let FileState::Loaded(hash) = self.file_state(id, &url, Want::Texture(0)) else {
                 continue;
             };
             let face = dom

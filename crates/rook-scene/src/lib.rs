@@ -148,6 +148,11 @@ pub struct SceneCache {
     images: content::images::LoadedImages,
     /// The ClickDetector hand's image once made, and its size in pixels.
     hand: Option<(ImageHash, Vec2)>,
+    /// The camera and view size textures are sized on screen by
+    /// ([`SceneCache::set_view`]).
+    view: Option<content::streaming::View>,
+    /// Counts frames, for looking over textures every few.
+    stream_tick: u32,
 }
 
 impl SceneCache {
@@ -187,6 +192,8 @@ impl SceneCache {
             gui_arrived: Vec::new(),
             images,
             hand: None,
+            view: None,
+            stream_tick: 0,
         };
         cache.rebuild(dom);
         cache

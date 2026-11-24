@@ -31,6 +31,9 @@ impl SceneCache {
     /// that changed.
     pub(crate) fn poll_files(&mut self, dom: &Dom, wait: bool) -> Vec<usize> {
         let finished = self.files.poll(wait);
+        for (hash, image) in self.files.take_upgraded() {
+            self.images.upgrade(hash, image);
+        }
         let mut changed = Vec::new();
         if !finished.is_empty() {
             self.take_finished(dom, finished, &mut changed);
