@@ -1,12 +1,14 @@
 -- The round button at the top left (Roblox's IconHitArea), with Rook's
 -- logo where Roblox has its own: it opens and closes the menu. Hovered,
--- an overlay lightens it; the logo grows while the menu is open.
+-- an overlay lightens it. The logo springs larger while the menu is
+-- open, and back when it closes.
 
 local CorePackages = game:GetService("CorePackages")
 local React = require(CorePackages.Packages.React)
 
 local Modules = script.Parent.Parent
 local Theme = require(Modules.Components.Theme)
+local useSpring = require(Modules.Components.useSpring)
 local Menu = require(Modules.Menu)
 
 local e = React.createElement
@@ -15,7 +17,7 @@ return function(props: { visible: boolean })
 	local hovered, setHovered = React.useState(false)
 	local menu = Menu.useState()
 	local T = Theme.topBar
-	local logo = if menu.open then T.logoOpenSize else T.logoSize
+	local logo = useSpring(if menu.open then T.logoOpenSize else T.logoSize, T.logoFrequency)
 	return e("ImageButton", {
 		AutoButtonColor = false,
 		Visible = props.visible,
@@ -39,7 +41,9 @@ return function(props: { visible: boolean })
 			Image = Theme.image("logo-mark"),
 			AnchorPoint = Vector2.new(0.5, 0.5),
 			Position = UDim2.fromScale(0.5, 0.5),
-			Size = UDim2.fromOffset(logo, logo),
+			Size = logo:map(function(v: number)
+				return UDim2.fromOffset(v, v)
+			end),
 		}),
 		StateOverlayRound = e("Frame", {
 			BackgroundColor3 = Theme.color.secondary,

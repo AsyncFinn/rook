@@ -41,9 +41,11 @@ Theme.topBar = {
 	buttonSize = 44,
 	buttonTransparency = 0.016,
 	hoverTransparency = 0.92,
-	-- ScalingIcon: 24 closed, 30 while the menu is open.
+	-- ScalingIcon: 24 closed, 30 while the menu is open. It springs
+	-- between them, critically damped at this many cycles a second.
 	logoSize = 24,
 	logoOpenSize = 30,
+	logoFrequency = 1 / 0.35,
 }
 
 Theme.menu = {

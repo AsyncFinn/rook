@@ -51,7 +51,10 @@ pixels.
 
 - **The button** (`IconHitArea`): 44 by 44 at (16, 12), round, (18, 18,
   21) at 0.016. Hovered, an overlay of (208, 217, 251) at 0.92 covers
-  it. Its icon is 24 pixels, and 30 while the menu is open. Roblox shows
+  it. Its icon is 24 pixels, and 30 while the menu is open. It doesn't
+  jump between them: it springs there, critically damped (no overshoot)
+  at 1 / 0.35 cycles a second, so it settles in about 0.4 s, as Roblox's
+  `ScalingIcon` does (Studio 0.748's `TopBar` IconButton). Roblox shows
   its own logo from an icon font; Rook shows its logo, drawn from
   `resources/rook.svg` without its tile.
 - **The backdrop** (`DarkenBackground`): black at 0.5. It is a button,

@@ -11,4 +11,5 @@ return {
 	Slider = require(script.Slider),
 	Button = require(script.Button),
 	TabBar = require(script.TabBar),
+	useSpring = require(script.useSpring),
 }

@@ -157,6 +157,26 @@ fn escape_opens_and_closes_the_menu() {
     assert_eq!(lines(client), ["opened true", "closed false"]);
 }
 
+/// The logo springs from 24 to 30 as the menu opens, rather than jumping,
+/// and back as it closes.
+#[test]
+fn the_logo_springs_to_its_open_size() {
+    let (mut session, index) = menu_session();
+    let logo = ["TopBarApp", "MenuButton", "ScalingIcon"];
+    let side = |s: &Session| rect(s, index, &logo).2;
+    assert_eq!(side(&session), 24.0);
+    // press() runs 0.1 s after the key: the logo is on its way.
+    press(&mut session, index, "Escape");
+    let early = side(&session);
+    assert!(early > 25.0 && early < 29.0, "0.1 s in it's {early}");
+    // AbsoluteSize is in whole pixels, so wait for the spring to rest.
+    session.run_for(1.0);
+    assert_eq!(side(&session), 30.0);
+    close(&mut session, index);
+    session.run_for(0.5);
+    assert_eq!(side(&session), 24.0);
+}
+
 /// The logo button opens the menu too, and the volume slider's minus
 /// lowers `MasterVolume` a step (the player's settings, which only
 /// Roblox's and Rook's own code may change).
