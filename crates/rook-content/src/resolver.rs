@@ -6,6 +6,7 @@
     clippy::disallowed_types,
     reason = "the content cache, install lookup and decode workers are rook-platform's known exception (docs/design/architecture.md#crate-layout)"
 )]
+pub mod builtin;
 pub mod cache;
 mod config;
 pub mod defaults;
@@ -230,6 +231,10 @@ impl Resolver {
                 return self.thumbnail(t);
             }
             ContentRef::File(path) => {
+                if let Some(bytes) = builtin::find(path) {
+                    let name = format!("rbxasset://{path}");
+                    return Ok(Fetched::new(bytes.to_vec(), SourceKind::Defaults, name));
+                }
                 if let Some(found) = self.resolve_local(r) {
                     return Ok(found);
                 }

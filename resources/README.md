@@ -23,3 +23,11 @@ On other platforms the build does nothing and windows get the system's default i
 ### Changing it
 
 Edit `rook.svg` and rebuild; there are no generated files to update. Keep it to shapes, gradients and filters: resvg is built without text or embedded images. Check the result at 16 pixels, the title bar's size, where thin details blur first.
+
+## Built-in images
+
+`rook-content`'s build script (`crates/rook-content/build.rs`) draws images from this folder into the binary. Rook serves them as `rbxasset://rook/<name>.png` (`resolver/builtin.rs`) for its own GUI, its CoreScripts. All are 128 pixels square:
+
+- `logo.png`: `rook.svg` as it is.
+- `logo-mark.png`: `rook.svg` without its tile, so just the white rook. The top bar's menu button shows it.
+- `icons/<name>.png`: each SVG in `icons/`, drawn in white so scripts can tint it with `ImageColor3`. These are [Lucide](https://lucide.dev) 1.78.0 icons (ISC, `icons/LICENSE`), copied unchanged from `icons/` in its repository. To add one, copy its SVG from the same tag.
