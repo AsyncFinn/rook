@@ -11,6 +11,11 @@ impl DataModel {
     /// Camera moves don't count; the renderer reads the camera every frame
     /// anyway.
     pub(crate) fn check_render_changes(&mut self) {
+        let Some(watch) = &mut self.render_watch else {
+            // Nothing draws this DataModel: its effect calls wait in the
+            // world for its clients.
+            return;
+        };
         profiling::scope!("check_render_changes");
         let calls = std::mem::take(&mut self.runtime.world_mut().effect_calls);
         self.render_changes.effect_calls.extend(calls);
@@ -25,7 +30,7 @@ impl DataModel {
         let any_of =
             |id: InstanceId, classes: &[ClassId]| classes.iter().any(|&c| dom.is_a_class(id, c));
         let changes = &mut self.render_changes;
-        let (first, journal) = self.render_watch.look(dom);
+        let (first, journal) = watch.look(dom);
         rook_types::count!(JournalReadRender, journal.len());
         let adorned = &mut self.adorned;
         let material_parts = &mut self.material_parts;

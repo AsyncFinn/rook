@@ -71,7 +71,9 @@ struct ListenerNode {
 
 #[derive(Debug, Default)]
 pub(crate) struct Hearing {
-    watch: JournalWatch,
+    /// `None` until a mix is first asked for, so a DataModel nobody hears
+    /// (a server) reads none of the journal for it and keeps nothing stale.
+    watch: Option<JournalWatch>,
     /// Sounds (and AudioPlayers) to read again before the next mix.
     stale: BTreeSet<InstanceId>,
     groups_stale: bool,
@@ -90,13 +92,23 @@ impl Hearing {
     /// Read `id` again before the next mix: the engine changed what it
     /// plays without the journal (its file, a seek, an end).
     pub(crate) fn touch(&mut self, id: InstanceId) {
-        self.stale.insert(id);
+        if self.watch.is_some() {
+            self.stale.insert(id);
+        }
+    }
+
+    /// How many sounds wait to be read again.
+    #[cfg(test)]
+    pub(crate) fn stale_count(&self) -> usize {
+        self.stale.len()
     }
 
     /// Look again at the whole tree from `cursor` (a client DataModel
     /// filled by hand).
     pub(crate) fn rescan(&mut self, cursor: u64) {
-        self.watch.rescan(cursor);
+        if let Some(watch) = &mut self.watch {
+            watch.rescan(cursor);
+        }
     }
 
     /// The effects a heard sound plays through, as last read.
@@ -120,7 +132,10 @@ impl Hearing {
     /// Note what the journal says changed since the last look: when the
     /// mix is asked for, and each frame before the journal is trimmed.
     pub(super) fn note(&mut self, dom: &Dom) {
-        let (first, changes) = self.watch.look(dom);
+        let Some(watch) = &mut self.watch else {
+            return;
+        };
+        let (first, changes) = watch.look(dom);
         if first {
             let c = classes();
             let all = dom.descendants(dom.root());
@@ -185,6 +200,8 @@ impl Hearing {
     /// `graph` lists the audio API's nodes and Wires, when the graph is
     /// built again.
     fn catch_up(&mut self, dom: &Dom, sounds: &Sounds, graph: impl FnOnce() -> Vec<InstanceId>) {
+        // The first mix starts the watch, whose first look reads every sound.
+        (self.watch).get_or_insert_with(|| JournalWatch::starting_at(dom.journal().end()));
         self.note(dom);
         let mut changed = false;
         let mut regroup = std::mem::take(&mut self.groups_stale);

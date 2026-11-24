@@ -62,10 +62,10 @@ impl Launch {
         if let Some(app) = &mut self.app {
             app.game.save_user_settings();
         }
-        if let Some(app) = &self.app
+        if let Some(app) = &mut self.app
             && self.options.frame_times
         {
-            app.readout.print_run(&app.game);
+            app.readout.print_run(&mut app.game);
         }
         Ok(())
     }

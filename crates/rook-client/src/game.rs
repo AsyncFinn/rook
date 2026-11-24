@@ -37,7 +37,8 @@ enum Mode {
 pub struct Game {
     mode: Mode,
     pub(crate) saved_camera: Camera,
-    /// Server and client step times, for `--bench` and the readout.
+    /// Server and client step times since their reader last took them:
+    /// the window's readout each second, `--bench` at its end.
     pub(crate) server_steps: Times,
     pub(crate) client_steps: Times,
     /// Time spent applying server frames since the last client step.

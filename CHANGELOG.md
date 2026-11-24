@@ -5,6 +5,7 @@ Every release, newest first. How versions are numbered is in
 
 ## [Unreleased]
 
+- A long play session's memory stays flat. The server kept every change for a renderer and a mixer it doesn't have, and the window kept every frame's step time, so both grew for as long as the game ran.
 - A member's argument that doesn't cast names a table as `Array` or `Dictionary` in its error, and an EnumItem as its enum, as in Roblox. Rook named either by its type in some members' errors.
 - A member function called with an instance of another class in place of `self` raises `Expected ':' not '.'`, as in Roblox. Rook ran the member on whatever instance it was given. See [member lookup](docs/behavior/scripting/member-lookup.md#calling-a-member-function).
 - `Lighting:GetSunDirection`, `GetMoonDirection` and `GetMoonPhase` work, and `ClockTime`, `TimeOfDay` and `SetMinutesAfterMidnight` take odd values and report their changes as in Roblox. Rook raised an error for the three methods and kept the time its own way, so odd values read back differently and only `TimeOfDay` reported a change. See [the clock](docs/behavior/lighting/clock.md).
