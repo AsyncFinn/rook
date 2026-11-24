@@ -361,8 +361,10 @@ screen each texture in view that can still grow (a decal's face, a
 texture's tile, even one larger than its face, a mesh's texture over the
 whole part, seen from the part's nearest point). Each grows towards that
 size a level every 0.35 s, fetching the packs a level needs when it gets
-there, so a 4096 texture seen up close from pack 0 reaches 4096 in seven
-steps, about 2.1 s. A texture growing when it leaves view stops at the
+there and drawing one more level each step, though a pack brings several
+(pack 1's 64, 128 and 256 show in turn, as Studio raises a texture's
+resident level one at a time), so a 4096 texture seen up close from pack
+0 reaches 4096 in seven steps, about 2.1 s. A texture growing when it leaves view stops at the
 level it reached, and larger levels that fail for now (a network failure,
 a pack being made) are asked for again two seconds later. The scene keeps
 the entries whose textures can still grow as they're written, and looks

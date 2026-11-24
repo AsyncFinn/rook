@@ -208,3 +208,18 @@ fn gui_images_fit_1024() {
         (300, 200, (300, 200))
     );
 }
+
+/// A streamed texture is drawn from the level it has grown to: its
+/// smallest level at least that large, blocks kept whole.
+#[test]
+fn draws_from_a_level() {
+    let pixels = ::image::RgbaImage::from_pixel(256, 128, ::image::Rgba([1, 2, 3, 255]));
+    let img = Image::decode(&png_of(&pixels)).unwrap();
+    let from = img.from_level(64);
+    assert_eq!((from.width, from.height, from.mips.len()), (64, 32, 7));
+    assert_eq!(from.mips[0], img.mips[2]);
+    assert_eq!(img.from_level(4096).width, 256, "no larger than it is");
+    let blocks = img.compressed(Encoding::Bc1);
+    // 8 × 4 is whole blocks, 4 × 2 isn't.
+    assert_eq!(blocks.from_level(1).width, 8);
+}

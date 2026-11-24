@@ -218,6 +218,35 @@ impl Image {
         })
     }
 
+    /// The image from its smallest level at least `side` pixels on its
+    /// longer side (or its largest), the levels above it left out: a
+    /// streamed texture drawn only as far as it has grown, as Roblox's
+    /// client raises a texture's resident levels one at a time. In blocks
+    /// the new largest level stays whole blocks, so one that wouldn't
+    /// keeps the level above.
+    pub fn from_level(&self, side: u32) -> Self {
+        let size = |level: usize| ((self.width >> level).max(1), (self.height >> level).max(1));
+        let mut first = 0;
+        while first + 1 < self.mips.len() {
+            let (w, h) = size(first + 1);
+            let whole_blocks = w.is_multiple_of(4) && h.is_multiple_of(4);
+            if w.max(h) < side || (self.encoding != Encoding::Rgba8 && !whole_blocks) {
+                break;
+            }
+            first += 1;
+        }
+        let (width, height) = size(first);
+        Self {
+            width,
+            height,
+            format: self.format,
+            encoding: self.encoding,
+            mips: self.mips[first..].to_vec(),
+            translucent: self.translucent,
+            gui_size: self.gui_size,
+        }
+    }
+
     /// Bytes held, over every level.
     pub fn byte_len(&self) -> usize {
         self.mips.iter().map(Vec::len).sum()

@@ -58,6 +58,11 @@ struct Streamed {
     target: u8,
     /// Its largest level's longer side now.
     side: u32,
+    /// The longer side of the largest level drawn: the level it's grown
+    /// to, though a pack may bring more.
+    shown: u32,
+    /// What it holds past what's drawn, until it's drawn whole.
+    held: Option<Arc<Image>>,
     /// It has no larger levels to fetch: it holds them all, or they
     /// can't come.
     whole: bool,
@@ -76,6 +81,8 @@ impl Streamed {
             level,
             target: level,
             side,
+            shown: side,
+            held: None,
             whole: false,
             loading: false,
             next: now,
@@ -83,14 +90,15 @@ impl Streamed {
         }
     }
 
-    /// Whether it can still come larger.
+    /// Whether it can still come larger: larger levels to fetch, or to
+    /// draw of those it holds.
     fn can_grow(&self) -> bool {
-        !self.whole && self.level < LARGEST
+        (!self.whole || self.shown < self.side) && self.level < LARGEST
     }
 
     /// Whether it's still to step (below its target, or loading).
     fn stepping(&self) -> bool {
-        self.loading || (self.can_grow() && self.level < self.target)
+        self.loading || (self.level < self.target && (self.can_grow() || self.shown < self.side))
     }
 
     /// Grow a level towards the target (straight to it with `hurry`) if
@@ -104,6 +112,24 @@ impl Streamed {
         self.next = now + STEP;
         self.loading = side_of(self.level) > self.side;
         self.loading.then_some(self.level)
+    }
+
+    /// What it holds as far as the level it's grown to, if that's more
+    /// than is drawn: a pack brings several levels, and Studio draws them
+    /// one step at a time (its `setResidency` raised the resident level by
+    /// one each step).
+    fn show(&mut self) -> Option<Arc<Image>> {
+        let held = self.held.as_ref()?;
+        let image = if side_of(self.level) >= self.side {
+            self.held.take()?
+        } else {
+            Arc::new(held.from_level(side_of(self.level)))
+        };
+        let side = image.width.max(image.height);
+        (side > self.shown).then(|| {
+            self.shown = side;
+            image
+        })
     }
 }
 
@@ -198,6 +224,7 @@ impl Files {
         };
         let streamed = &mut self.streamed;
         let upgrades = &mut self.upgrades;
+        let upgraded = &mut self.upgraded;
         self.stepping.retain(|hash| {
             let Some(s) = streamed.get_mut(hash) else {
                 return false;
@@ -205,6 +232,8 @@ impl Files {
             if let Some(level) = s.step(now, hurry) {
                 let ticket = loader.request_at(s.r.clone(), Want::Texture(level), s.priority);
                 upgrades.insert(ticket, *hash);
+            } else if let Some(image) = s.show() {
+                upgraded.push((*hash, image));
             }
             s.stepping()
         });
@@ -228,8 +257,11 @@ impl Files {
                     let side = image.width.max(image.height);
                     if side > s.side {
                         s.side = side;
-                        self.upgraded.push((hash, image));
+                        s.held = Some(image);
                     }
+                }
+                if let Some(image) = s.show() {
+                    self.upgraded.push((hash, image));
                 }
             }
             // For now: back to what it holds, to step again later.
@@ -385,6 +417,43 @@ mod tests {
         assert_eq!(s.level, 10);
         // Five levels, the first at once.
         assert!(took >= STEP * 4 && took < STEP * 5, "{took:?}");
+    }
+
+    /// A pack brings several levels, drawn one a step: pack 1 of a 4096
+    /// texture (largest 256) shows 64, then 128, then 256.
+    #[test]
+    fn draws_a_pack_a_level_at_a_time() {
+        let start = Instant::now();
+        let mut s = Streamed::new(
+            ContentRef::Asset {
+                id: 1,
+                version: None,
+            },
+            32,
+            start,
+        );
+        s.target = 8;
+        assert_eq!(s.step(start, false), Some(6));
+        let pixels = vec![[0, 0, 255, 255]; 256 * 256].concat();
+        let pack1 = Arc::new(Image {
+            width: 256,
+            height: 256,
+            format: rook_content::decode::image::ImageFormat::Ktx2,
+            encoding: rook_content::decode::image::Encoding::Rgba8,
+            mips: rook_content::decode::image::mips(pixels, 256, 256),
+            translucent: false,
+            gui_size: (256, 256),
+        });
+        (s.loading, s.side, s.held) = (false, 256, Some(pack1));
+        let mut drawn = vec![s.show().unwrap().width];
+        let mut now = start;
+        while s.stepping() {
+            now += STEP;
+            assert_eq!(s.step(now, false), None, "nothing more to fetch");
+            drawn.extend(s.show().map(|i| i.width));
+        }
+        assert_eq!(drawn, [64, 128, 256]);
+        assert!(s.held.is_none(), "drawn whole, it's the renderer's");
     }
 
     #[test]
