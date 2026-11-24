@@ -312,3 +312,29 @@ fn the_mix_changes_only_with_its_sounds() {
     assert_eq!(gains(global), Some([0.2; 2]));
     assert_ne!(client.mix().version, version);
 }
+
+/// A server nobody hears keeps no sounds to read again however many come,
+/// change and go; the first mix asked for reads every one.
+#[test]
+fn an_unheard_server_keeps_nothing_stale() {
+    let mut s = Server::new(&Options::default()).unwrap();
+    s.start();
+    s.run_extra_script(
+        "
+        game:GetService('RunService').Heartbeat:Connect(function()
+            local sound = Instance.new('Sound')
+            sound.Parent = workspace
+            sound.Volume = 0.25
+            task.defer(sound.Destroy, sound)
+        end)
+        Instance.new('Sound', workspace).Name = 'Kept'
+    ",
+    )
+    .unwrap();
+    for _ in 0..30 {
+        s.step();
+    }
+    assert_eq!(s.sounds.hearing.borrow().stale_count(), 0);
+    let _ = s.mix();
+    assert_eq!(s.sounds.hearing.borrow().stale_count(), 0, "all read");
+}
