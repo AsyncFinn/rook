@@ -30,15 +30,15 @@ return function(props: { choices: { string }, index: number, onChange: (number) 
 				step(direction)
 			end,
 		}, {
-			Icon = e(Icon, { name = icon, size = 24, ImageColor3 = Theme.color.arrow }),
+			Icon = e(Icon, { name = icon, size = 24, TextColor3 = Theme.color.arrow }),
 		})
 	end
 	return e("Frame", {
 		BackgroundTransparency = 1,
 		Size = UDim2.fromScale(1, 1),
 	}, {
-		LeftButton = arrow("chevron-left", -1),
-		RightButton = arrow("chevron-right", 1),
+		LeftButton = arrow("chevron-large-left", -1),
+		RightButton = arrow("chevron-large-right", 1),
 		Selection = e(Text, {
 			Text = props.choices[props.index] or "",
 			FontFace = Theme.font.regular,

@@ -12,6 +12,3 @@ Rook's CoreScripts (crates/rook-engine/corescripts/Packages) include
 React-Lua, LuauPolyfill and SafeFlags by Roblox Corporation, and Promise
 by Eryn L. K., all under the MIT License; each package's LICENSE file is
 beside its code.
-
-Rook's built-in icons (resources/icons) are Lucide icons by Lucide Icons
-and Contributors, under the ISC License (resources/icons/LICENSE).

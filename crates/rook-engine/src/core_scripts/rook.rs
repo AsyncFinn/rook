@@ -6,8 +6,10 @@
 //! development takes a restart, not a rebuild. See
 //! docs/behavior/gui/core-scripts.md#rooks-own.
 //!
-//! The file has the patch's shape ([`tree`]), so [`CorePatch::install`]
-//! runs either one; its scripts are source, compiled when it loads.
+//! The file has the patch's shape ([`tree`]) and holds its scripts as
+//! bytecode the way the patch does ([`build`]), so one loader reads
+//! either and [`CorePatch::install`] runs either. The source folder's
+//! scripts are compiled when it loads.
 
 use std::path::Path;
 use std::sync::{Arc, OnceLock};
@@ -52,38 +54,19 @@ impl CorePatch {
             .ok()
             .and_then(|exe| Some(exe.parent()?.join(FILE)))
             .filter(|path| files.exists(path));
-        let dom = match built {
-            Some(path) => {
-                let bytes = files
-                    .read(&path)
-                    .map_err(|e| format!("{}: {e}", path.display()))?;
-                rook_formats::load(&bytes)
-                    .map_err(|e| format!("{}: {e}", path.display()))?
-                    .dom
-            }
-            None => tree(Path::new(SOURCE))?,
+        let Some(path) = built else {
+            return Self::from_source(tree(Path::new(SOURCE))?);
         };
-        Self::from_source(dom)
-    }
-
-    /// A package whose scripts hold source: each is compiled now, as
-    /// Roblox's game code is (optimization level 2), across the workers.
-    pub(crate) fn from_source(dom: WeakDom) -> Result<Self, String> {
-        let mut scripts = Vec::new();
-        for (i, &top) in dom.root().children().iter().enumerate() {
-            let index = u32::try_from(i).map_err(|e| e.to_string())?;
-            collect(&dom, top, &[index], &mut scripts);
+        let bytes = files
+            .read(&path)
+            .map_err(|e| format!("{}: {e}", path.display()))?;
+        let (dom, compiled) = Self::read(&bytes).map_err(|e| format!("{}: {e}", path.display()))?;
+        if compiled.is_empty() {
+            return Err(format!(
+                "{} holds no compiled scripts; build it again with `cargo xtask core-scripts`",
+                path.display()
+            ));
         }
-        let compiled = rook_platform::get()
-            .workers
-            .map(&scripts, |(path, name, source)| {
-                mlua::chunk::Compiler::new()
-                    .set_optimization_level(2)
-                    .compile(source)
-                    .map(|code| (path.clone(), Arc::<[u8]>::from(code)))
-                    .map_err(|e| format!("{name}: {e}"))
-            });
-        let compiled = compiled.into_iter().collect::<Result<Vec<_>, _>>()?;
         Ok(Self {
             dom,
             compiled,
@@ -91,6 +74,67 @@ impl CorePatch {
             server_scripts: None,
         })
     }
+
+    /// A package whose scripts hold source: each is compiled now, as
+    /// Roblox's game code is (optimization level 2), across the workers.
+    pub(crate) fn from_source(dom: WeakDom) -> Result<Self, String> {
+        let compiled = compile_all(&dom)?
+            .into_iter()
+            .map(|(path, _, code)| (path, code))
+            .collect();
+        Ok(Self {
+            dom,
+            compiled,
+            flags: Arc::new(FxHashMap::default()),
+            server_scripts: None,
+        })
+    }
+}
+
+/// Every script in `dom` compiled across the workers, as Roblox compiles
+/// game code (optimization level 2): its place in the tree, its source
+/// and its bytecode. An error names the script.
+#[expect(
+    clippy::type_complexity,
+    reason = "one tuple per script, taken apart by both callers"
+)]
+fn compile_all(dom: &WeakDom) -> Result<Vec<(Vec<u32>, String, Arc<[u8]>)>, String> {
+    let mut scripts = Vec::new();
+    for (i, &top) in dom.root().children().iter().enumerate() {
+        let index = u32::try_from(i).map_err(|e| e.to_string())?;
+        collect(dom, top, &[index], &mut scripts);
+    }
+    rook_platform::get()
+        .workers
+        .map(&scripts, |(path, name, source)| {
+            mlua::chunk::Compiler::new()
+                .set_optimization_level(2)
+                .compile(source)
+                .map(|code| (path.clone(), source.clone(), Arc::<[u8]>::from(code)))
+                .map_err(|e| format!("{name}: {e}"))
+        })
+        .into_iter()
+        .collect()
+}
+
+/// The package in `dir` as the file that ships beside the exe: [`tree`]
+/// saved as a binary model with each script's source replaced by its
+/// bytecode, as Roblox's patch holds its scripts.
+pub fn build(dir: &Path) -> Result<Vec<u8>, String> {
+    let dom = tree(dir)?;
+    let code: FxHashMap<String, Arc<[u8]>> = compile_all(&dom)?
+        .into_iter()
+        .map(|(_, source, code)| (source, code))
+        .collect();
+    let bytes =
+        rook_formats::save(&dom, rook_formats::Format::Binary).map_err(|e| e.to_string())?;
+    rook_formats::compile_scripts(&bytes, |source| {
+        String::from_utf8(source.to_vec())
+            .ok()
+            .and_then(|source| code.get(&source))
+            .map(|code| code.to_vec())
+            .ok_or_else(|| "a saved script's source isn't one the tree holds".to_owned())
+    })
 }
 
 /// Every script under `id` (and `id` itself): its place in the tree, its
@@ -268,4 +312,24 @@ fn list(dir: &Path) -> Result<Vec<rook_platform::files::Entry>, String> {
         .map_err(|e| format!("{}: {e}", dir.display()))?;
     entries.sort_by(|a, b| a.path.file_name().cmp(&b.path.file_name()));
     Ok(entries)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The built file holds every script of the source folder, compiled,
+    /// where the source folder's own load puts it, and reads back through
+    /// the loader Roblox's patch takes.
+    #[test]
+    fn the_built_file_holds_every_script_compiled() {
+        let source = CorePatch::from_source(tree(Path::new(SOURCE)).unwrap()).unwrap();
+        let bytes = build(Path::new(SOURCE)).unwrap();
+        let (_, mut built) = CorePatch::read(&bytes).unwrap();
+        let mut wanted = source.compiled;
+        built.sort_by(|a, b| a.0.cmp(&b.0));
+        wanted.sort_by(|a, b| a.0.cmp(&b.0));
+        assert!(wanted.len() > 200, "{} scripts", wanted.len());
+        assert_eq!(built, wanted);
+    }
 }

@@ -197,19 +197,30 @@ way.
   the pieces go under `DataModelInstances.CoreGui.RobloxGui.Modules`, and
   `Packages/` under `DataModelInstances.CorePackages.Packages`. A client
   installs it as it installs Roblox's patch, and `StarterScript` starts
-  each piece with `ScriptContext:AddCoreScriptLocal`. The file holds
-  source, which Rook compiles when it loads: about 50 ms for React-Lua
-  and its packages on one thread, 15 across 32.
+  each piece with `ScriptContext:AddCoreScriptLocal`. Like Roblox's
+  patch, the file holds its scripts as Luau bytecode (`Source` saved as
+  property type 0x1D, `rook-formats`' `compile_scripts`), compiled at
+  optimization level 2 when it's built, so the same loader reads both
+  and a run spends no time compiling. The file belongs to one exe, so
+  its bytecode is always the version that exe runs.
 - **Where it's read.** `RookCoreScripts.rbxm` beside the exe, as Roblox's
   `DataModelPatch.rbxm` sits in its version folder (`cargo xtask package`
   puts it beside `rook-player`). A build with no file there reads
-  `corescripts/` from the source tree it was built from, so editing a
-  script takes a restart, not a rebuild.
+  `corescripts/` from the source tree it was built from and compiles it
+  then (about 50 ms for React-Lua and its packages on one thread, 15
+  across 32), so editing a script takes a restart, not a rebuild.
 - **PlayerScripts.** The package has none. A client running it gets no
   PlayerModule, as before it existed, and the window flies its own
   camera ([camera](../characters/camera.md)).
-- **Images.** Its logo and icons are `rbxasset://rook/` images, drawn
-  from `resources/` when Rook is built ([resources](../../../resources/README.md#built-in-images)).
+- **Logo.** Rook's logo is a `rbxasset://rook/` image, drawn from
+  `resources/` when Rook is built ([resources](../../../resources/README.md#built-in-images)).
+  It takes the place of Roblox's at the same size.
+- **Icons.** Roblox's own: glyphs of its Builder Icons font
+  (`rbxasset://LuaPackages/Packages/_Index/BuilderIcons/BuilderIcons/BuilderIcons.json`),
+  drawn as Roblox's CoreScripts draw them, a TextLabel whose text is the
+  glyph's name, with the names from the recordings. The font is read from
+  the player's install or Rook's downloaded content packages, like other
+  `rbxasset://` content, and isn't shipped.
 
 ## What Rook lacks
 

@@ -1,8 +1,7 @@
 //! Rook's built-in images, drawn from `resources/` at build time and
 //! served as `rbxasset://rook/<name>.png` (`resolver::builtin`): its logo
-//! from `rook.svg`, the white rook alone from the same file (`logo-mark`),
-//! and the icons in `resources/icons/` drawn in white for scripts to tint
-//! (`icons/<name>`). See resources/README.md.
+//! from `rook.svg`, and the white rook alone from the same file
+//! (`logo-mark`). See resources/README.md.
 #![expect(
     clippy::disallowed_methods,
     reason = "a build script runs on the build machine, outside rook-platform"
@@ -32,24 +31,6 @@ fn main() {
         "logo-mark.png".into(),
         format!("{}{}", &logo[..start], &logo[end..]),
     ));
-
-    let icons = resources.join("icons");
-    println!("cargo::rerun-if-changed={}", icons.display());
-    let mut names: Vec<PathBuf> = fs::read_dir(&icons)
-        .expect("read resources/icons")
-        .flatten()
-        .map(|e| e.path())
-        .filter(|p| p.extension().is_some_and(|e| e == "svg"))
-        .collect();
-    names.sort();
-    for path in names {
-        println!("cargo::rerun-if-changed={}", path.display());
-        let svg = fs::read_to_string(&path)
-            .expect("read an icon")
-            .replace("currentColor", "#ffffff");
-        let stem = path.file_stem().expect("a name").to_string_lossy();
-        images.push((format!("icons/{stem}.png"), svg));
-    }
 
     let mut table = String::from("&[\n");
     for (i, (name, svg)) in images.iter().enumerate() {

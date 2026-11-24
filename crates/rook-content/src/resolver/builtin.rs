@@ -1,7 +1,9 @@
 //! Rook's built-in images, `rbxasset://rook/<name>`: drawn from
 //! `resources/` when Rook is built (`build.rs`) and kept in the binary, so
-//! Rook's own GUI (its CoreScripts) has its logo and icons with no files
-//! beside it. Roblox's content has no `rook` folder.
+//! Rook's own GUI (its CoreScripts) has its logo with no files beside it.
+//! Its icons are Roblox's Builder Icons font, read from the player's
+//! install like other `rbxasset://` content. Roblox's content has no
+//! `rook` folder.
 
 /// Each image's path below `rook/` and its PNG.
 static IMAGES: &[(&str, &[u8])] = include!(concat!(env!("OUT_DIR"), "/builtin.rs"));
@@ -24,12 +26,8 @@ mod tests {
     use super::*;
 
     #[test]
-    fn the_logo_and_icons_are_built_in() {
-        for path in [
-            "rook/logo.png",
-            "rook/logo-mark.png",
-            "Rook/Icons/Settings.png",
-        ] {
+    fn the_logo_is_built_in() {
+        for path in ["rook/logo.png", "Rook/Logo-Mark.PNG"] {
             let png = find(path).unwrap_or_else(|| panic!("{path}"));
             assert_eq!(&png[1..4], b"PNG", "{path}");
         }

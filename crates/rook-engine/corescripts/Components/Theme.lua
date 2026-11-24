@@ -5,6 +5,8 @@
 -- readable there: docs/behavior/gui/menu.md says why.
 
 local FONT = "rbxasset://fonts/families/BuilderSans.json"
+-- Roblox's icon font, from the player's install or content packages.
+local ICONS = "rbxasset://LuaPackages/Packages/_Index/BuilderIcons/BuilderIcons/BuilderIcons.json"
 
 local Theme = {}
 
@@ -12,6 +14,8 @@ Theme.font = {
 	regular = Font.new(FONT, Enum.FontWeight.Regular),
 	medium = Font.new(FONT, Enum.FontWeight.Medium),
 	bold = Font.new(FONT, Enum.FontWeight.Bold),
+	-- Components/Icon's glyphs (ScalingIcon, TabLabel.Icon).
+	icons = Font.new(ICONS, Enum.FontWeight.Regular),
 }
 
 Theme.color = {
@@ -29,7 +33,7 @@ Theme.color = {
 	-- Slider steps (StepsContainer.Step<n>), lit and unlit.
 	stepOn = Color3.fromRGB(217, 217, 217),
 	stepOff = Color3.fromRGB(57, 59, 61),
-	-- Selector and slider arrows (LeftButton, RightButton images).
+	-- Selector and slider arrows (LeftButton, RightButton).
 	arrow = Color3.fromRGB(204, 204, 204),
 	-- CameraSensitivityTextBox.
 	field = Color3.fromRGB(51, 51, 51),
@@ -42,7 +46,8 @@ Theme.topBar = {
 	buttonTransparency = 0.016,
 	hoverTransparency = 0.92,
 	-- ScalingIcon: 24 closed, 30 while the menu is open. It springs
-	-- between them, critically damped at this many cycles a second.
+	-- between them, critically damped at this many cycles a second
+	-- (Inference: docs/behavior/gui/menu.md says where it was read).
 	logoSize = 24,
 	logoOpenSize = 30,
 	logoFrequency = 1 / 0.35,
@@ -132,7 +137,7 @@ Theme.section = {
 	dividerTransparency = 0.88,
 }
 
--- Slider: 32 by 50 buttons with 30-pixel images either end, steps in
+-- Slider: 32 by 50 buttons with 30-pixel icons either end, steps in
 -- the rest less 100, each 0.1 of it less 4 and 24 tall.
 Theme.slider = {
 	buttonWidth = 32,
@@ -174,13 +179,9 @@ Theme.button = {
 	disabledTextTransparency = 0.6,
 }
 
--- A built-in image (crates/rook-content/build.rs).
+-- A built-in image (crates/rook-content/build.rs): Rook's logo.
 function Theme.image(name: string): string
 	return "rbxasset://rook/" .. name .. ".png"
-end
-
-function Theme.icon(name: string): string
-	return Theme.image("icons/" .. name)
 end
 
 return Theme

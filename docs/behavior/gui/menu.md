@@ -52,11 +52,16 @@ pixels.
 - **The button** (`IconHitArea`): 44 by 44 at (16, 12), round, (18, 18,
   21) at 0.016. Hovered, an overlay of (208, 217, 251) at 0.92 covers
   it. Its icon is 24 pixels, and 30 while the menu is open. It doesn't
-  jump between them: it springs there, critically damped (no overshoot)
-  at 1 / 0.35 cycles a second, so it settles in about 0.4 s, as Roblox's
-  `ScalingIcon` does (Studio 0.748's `TopBar` IconButton). Roblox shows
-  its own logo from an icon font; Rook shows its logo, drawn from
-  `resources/rook.svg` without its tile.
+  jump between them but springs there, critically damped (no overshoot),
+  settling in about 0.4 s.
+  - Inference: the spring, 1 / 0.35 cycles a second at damping ratio 1,
+    is read from `IconButton.lua` in Studio 0.748's
+    `ExtraContent/scripts/CoreScripts/Modules/TopBar/Components/Presentation`
+    ([policies](../../design/policies.md#clean-implementation)); the
+    recording has only its two ends.
+  - Roblox's icon is the Builder Icons glyph `tilt`, its logo; Rook shows
+    its own logo in its place, drawn from `resources/rook.svg` without
+    its tile.
 - **The backdrop** (`DarkenBackground`): black at 0.5. It is a button,
   so the game's buttons behind it get no clicks while the menu opens.
 - **The panel** (`MenuContainer`): 840 by 734, black at 0.06, round by
@@ -71,9 +76,9 @@ pixels.
 - **Tabs**: each takes a fifth of the bar (160 by 60). It holds a
   24-pixel icon, then 10 pixels, then its name in BuilderSans Medium 19.
   The selected tab has a 2-pixel white line under it; the others are at
-  0.5. Rook's icons are [Lucide](https://lucide.dev)'s (`users`,
-  `settings`, `circle-question-mark`); Roblox's come from its own icon
-  font.
+  0.5. The icons are the recording's: glyphs of Roblox's Builder Icons
+  font (`two-people`, `gear`, `circle-question`), a TextLabel each with
+  the glyph's name as its text, scaled to fit.
 - **Rows** (`<name>Frame`): 50 tall, or taller with a description,
   round by 8. The name is BuilderSans Medium 17, 10 in, taking 0.4 of
   the row less 20, padded 10 above and below. A description goes 8
@@ -89,7 +94,10 @@ pixels.
     the recording doesn't read; its text is 25 tall, which BuilderSans
     Bold 20 fills.
 - **Selectors** (`Selector`): arrows 32 by 50 at either end, in (204,
-  204, 204). The choice is between them in BuilderSans Regular 17. The
+  204, 204). Inference: Roblox draws the arrows, the sliders' minus and
+  plus and the dropdown's arrow as images, which the recording doesn't
+  name; Rook draws Builder Icons' `chevron-large-left` and `-right`,
+  `circle-minus` and `circle-plus`, and `chevron-large-down`. The choice is between them in BuilderSans Regular 17. The
   arrows, or the choice itself, step through the choices, wrapping round.
 - **Sliders** (`Slider`): ten steps (`StepsContainer`, the slider less
   100), each a tenth less 4, 24 tall. A step is (217, 217, 217) up to

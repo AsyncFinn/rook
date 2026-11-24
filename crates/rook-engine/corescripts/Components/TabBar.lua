@@ -53,7 +53,7 @@ return function(props: { tabs: { Tab }, selected: string, onSelect: (string) -> 
 					size = if props.small then T.smallIconSize else T.iconSize,
 					AnchorPoint = Vector2.zero,
 					Position = UDim2.new(),
-					ImageTransparency = fade,
+					TextTransparency = fade,
 					LayoutOrder = 1,
 				}),
 				Title = e(Text, {

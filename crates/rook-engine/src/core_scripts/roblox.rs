@@ -18,12 +18,7 @@ impl CorePatch {
         let bytes = files
             .read(patch)
             .map_err(|e| format!("{}: {e}", patch.display()))?;
-        let dom = rook_formats::load(&bytes).map_err(|e| e.to_string())?.dom;
-        let compiled = rook_formats::compiled_scripts(&bytes)
-            .map_err(|e| e.to_string())?
-            .into_iter()
-            .map(|c| (c.path, Arc::from(c.bytecode)))
-            .collect();
+        let (dom, compiled) = Self::read(&bytes)?;
         let flags = flags
             .and_then(|path| files.read(path).ok())
             .and_then(|text| {
@@ -46,5 +41,24 @@ impl CorePatch {
             flags: Arc::new(flags),
             server_scripts,
         })
+    }
+
+    /// A package file's tree and its scripts' bytecode, saved as Roblox
+    /// saves it (`rook_formats::compiled_scripts`): Roblox's patch, or
+    /// Rook's built one.
+    #[expect(
+        clippy::type_complexity,
+        reason = "the pair is CorePatch's own two fields"
+    )]
+    pub(super) fn read(
+        bytes: &[u8],
+    ) -> Result<(rbx_dom_weak::WeakDom, Vec<(Vec<u32>, Arc<[u8]>)>), String> {
+        let dom = rook_formats::load(bytes).map_err(|e| e.to_string())?.dom;
+        let compiled = rook_formats::compiled_scripts(bytes)
+            .map_err(|e| e.to_string())?
+            .into_iter()
+            .map(|c| (c.path, Arc::from(c.bytecode)))
+            .collect();
+        Ok((dom, compiled))
     }
 }

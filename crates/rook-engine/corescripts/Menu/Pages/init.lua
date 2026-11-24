@@ -11,9 +11,9 @@ local Pages = {
 -- Gallery and Report (docs/behavior/gui/menu.md). `id` is the tab's name
 -- in Roblox's HubBar.
 Pages.tabs = {
-	{ name = "People", icon = "users", id = "PeopleTab" },
-	{ name = "Settings", icon = "settings", id = "GameSettingsTab" },
-	{ name = "Help", icon = "circle-question-mark", id = "HelpTab" },
+	{ name = "People", icon = "two-people", id = "PeopleTab" },
+	{ name = "Settings", icon = "gear", id = "GameSettingsTab" },
+	{ name = "Help", icon = "circle-question", id = "HelpTab" },
 }
 
 return Pages

@@ -518,6 +518,20 @@ fn the_layout_is_roblox_s() {
         matches(
             &session,
             index,
+            &at(&[
+                "HubBar",
+                "HubBarContainer",
+                "GameSettingsTab",
+                "TabLabel",
+                "Icon",
+            ]),
+            label,
+            "GameSettingsTab/TabLabel/Icon",
+            false,
+        );
+        matches(
+            &session,
+            index,
             &at(&["PageViewClipper"]),
             label,
             "Page/PageViewClipper",
@@ -620,6 +634,60 @@ fn the_layout_is_roblox_s() {
             label,
             "MenuButtonContainer3/MenuButton",
             true,
+        );
+    }
+}
+
+/// Each tab's icon is the Builder Icons glyph Roblox's tab shows, drawn as
+/// one glyph rather than its name's letters. The font is read from a
+/// Roblox install, so without one only the glyphs' names are checked.
+#[test]
+fn the_tabs_show_roblox_s_glyphs() {
+    use rook_content::resolver::install;
+    let installed =
+        install::newest_from(None, &install::Places::from_env(|n| std::env::var_os(n))).is_some();
+    let (mut session, index) = menu_session();
+    open(&mut session, index);
+    let json: serde_json::Value = serde_json::from_str(RECORDING).unwrap();
+    let snapshot = json["snapshots"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|s| s["label"] == "open-settings")
+        .unwrap();
+    let w = session.client(index).unwrap().runtime().world();
+    let dom = &w.dom;
+    for tab in ["PeopleTab", "GameSettingsTab", "HelpTab"] {
+        let suffix = format!("{tab}/TabLabel/Icon");
+        let theirs = snapshot["nodes"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|n| n["path"].as_str().unwrap().ends_with(&suffix))
+            .unwrap();
+        let path = [
+            "RookMenu",
+            "SettingsShield",
+            "MenuContainer",
+            "HubBar",
+            "HubBarContainer",
+            tab,
+            "TabLabel",
+            "Icon",
+        ];
+        let id = path
+            .iter()
+            .try_fold(dom.find_service("CoreGui").unwrap(), |at, child| {
+                dom.find_first_child(at, child, false)
+            })
+            .unwrap();
+        let text = dom.string_property(id, "Text");
+        assert_eq!(text.as_deref(), theirs["Text"].as_str(), "{tab}");
+        let bounds = dom.vector2_property(id, "TextBounds").unwrap();
+        assert!(
+            !installed || bounds.x() <= 25.0,
+            "{tab}: {} wide",
+            bounds.x()
         );
     }
 }

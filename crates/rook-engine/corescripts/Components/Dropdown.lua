@@ -75,7 +75,7 @@ return function(props: { choices: { string }, index: number, onChange: (number) 
 			Size = UDim2.new(1, -50, 1, 0),
 		}),
 		DropDownImage = e(Icon, {
-			name = "chevron-down",
+			name = "chevron-large-down",
 			size = 15,
 			AnchorPoint = Vector2.new(1, 0.5),
 			Position = UDim2.new(1, -Theme.dropdown.arrowInset, 0.5, 0),

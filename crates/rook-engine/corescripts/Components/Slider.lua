@@ -109,7 +109,7 @@ return function(props: { value: number, steps: number?, onChange: (number) -> ()
 				choose(props.value + direction)
 			end,
 		}, {
-			Icon = e(Icon, { name = icon, size = S.iconSize, ImageColor3 = Theme.color.arrow }),
+			Icon = e(Icon, { name = icon, size = S.iconSize, TextColor3 = Theme.color.arrow }),
 		})
 	end
 
