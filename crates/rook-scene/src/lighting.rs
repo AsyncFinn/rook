@@ -6,18 +6,14 @@ pub(super) use local::LightCache;
 
 use super::*;
 use sky::sky_tint;
-use sun::{sun_and_moon, sun_direction};
+use sun::sun_and_moon;
 
 pub(super) fn lighting(dom: &Dom) -> Lighting {
     let mut l = Lighting::default();
     let Some(id) = dom.find_service("Lighting") else {
         return l;
     };
-    let hours = dom.clock_time(id) as f32;
-    let latitude = dom
-        .float_property(id, "GeographicLatitude")
-        .unwrap_or(41.733);
-    let sun = sun_direction(hours, latitude);
+    let sun = dom.sun_direction(id);
     let brightness = dom.float_property(id, "Brightness").unwrap_or(2.0);
     (l.sun_direction, l.sun_color) = sun_and_moon(sun, brightness);
     if let Some(c) = dom.color3_property(id, "Ambient").map(Color3::to_array) {
@@ -73,7 +69,7 @@ pub(super) fn lighting(dom: &Dom) -> Lighting {
         .unwrap_or(0.0)
         .exp2();
     l.tonemapper = tonemapper(dom, id);
-    l.sky_tint = sky_tint(hours);
+    l.sky_tint = sky_tint(dom.clock(id).hours() as f32);
     l.sky_bottom = l.sky_horizon;
     l
 }

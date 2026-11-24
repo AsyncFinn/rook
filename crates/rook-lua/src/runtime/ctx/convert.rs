@@ -95,7 +95,7 @@ pub(crate) fn from_lua(lua: &Lua, v: &LuaValue, ty: PropertyType) -> Result<Valu
                 VariantType::Float32 => Value::Float32(loose_number(v).ok_or_else(fail)? as f32),
                 VariantType::Float64 => Value::Float64(loose_number(v).ok_or_else(fail)?),
                 VariantType::Int32 => {
-                    Value::Int32(loose_number(v).ok_or_else(fail)?.clamp(-2.1e9, 2.1e9) as i32)
+                    Value::Int32(rook_types::int32(loose_number(v).ok_or_else(fail)?))
                 }
                 VariantType::Int64 => Value::Int64(loose_number(v).ok_or_else(fail)? as i64),
                 VariantType::String => Value::String(lua_string(v).ok_or_else(fail)?),
@@ -229,7 +229,9 @@ pub(crate) fn variant_name(vt: VariantType) -> &'static str {
         VariantType::BrickColor => "BrickColor",
         VariantType::UDim => "UDim",
         VariantType::UDim2 => "UDim2",
-        VariantType::Ref => "Object",
+        // Confirmed (conformance content/int_properties): "Unable to assign
+        // property SideChain. Instance expected, got string".
+        VariantType::Ref => "Instance",
         VariantType::NumberRange => "NumberRange",
         VariantType::NumberSequence => "NumberSequence",
         VariantType::ColorSequence => "ColorSequence",

@@ -40,6 +40,36 @@ pub(crate) fn type_name(v: &LuaValue) -> String {
     }
 }
 
+/// What Roblox's reflection calls a value it couldn't cast, in `Unable to
+/// cast X to Y`: numbers are `double`, booleans `bool`, a table with keys
+/// but no first item `Dictionary` and any other `Array`, an EnumItem its
+/// enum, anything else its type name. Measured: `{}` is `Unable to cast
+/// Array to Vector2`, another enum's item `Unable to cast Material to
+/// ThumbnailType`.
+pub(crate) fn cast_name(v: &LuaValue) -> String {
+    match v {
+        LuaValue::Integer(_) | LuaValue::Number(_) => "double".into(),
+        LuaValue::Boolean(_) => "bool".into(),
+        LuaValue::Table(t) if is_dictionary(t) => "Dictionary".into(),
+        LuaValue::Table(_) => "Array".into(),
+        LuaValue::UserData(u) => u
+            .borrow::<crate::types::enums::LEnumItem>()
+            .map_or_else(|_| type_name(v), |item| item.enum_name().to_owned()),
+        v => type_name(v),
+    }
+}
+
+/// Whether Roblox's reflection reads `t` as a Dictionary rather than an
+/// Array: it has keys but no first item.
+fn is_dictionary(t: &mlua::Table) -> bool {
+    t.raw_get::<LuaValue>(1).is_ok_and(|v| v.is_nil()) && !t.is_empty()
+}
+
+/// `v` didn't cast to `target`: `Unable to cast string to int64`.
+pub(crate) fn cast_error(v: &LuaValue, target: &str) -> ScriptError {
+    ScriptError(format!("Unable to cast {} to {target}", cast_name(v)))
+}
+
 pub(crate) fn number_of(v: &LuaValue) -> Option<f64> {
     match v {
         LuaValue::Integer(i) => Some(*i as f64),
@@ -146,6 +176,16 @@ impl Args {
         ))
     }
 
+    /// Roblox's reflection's message for argument `i`, which isn't a `to`:
+    /// `Argument 1 missing or nil` for nil, else `Unable to cast string to
+    /// int`.
+    pub(crate) fn cast_error(&self, i: usize, to: &str) -> ScriptError {
+        match self.get(i) {
+            LuaValue::Nil => self.missing(i),
+            v => cast_error(v, to),
+        }
+    }
+
     pub(crate) fn number(&self, i: usize) -> ApiResult<f64> {
         match self.get(i) {
             LuaValue::Nil => Err(self.missing(i)),
@@ -172,20 +212,8 @@ impl Args {
     /// `Unable to cast double to ThumbnailSize`, another enum's item
     /// `Unable to cast Material to ThumbnailType`.
     pub(crate) fn enum_value(&self, lua: &Lua, i: usize, enum_name: &str) -> ApiResult<u32> {
-        let v = self.get(i);
-        if v.is_nil() {
-            return Err(self.missing(i));
-        }
-        crate::types::enums::item_value(lua, v, enum_name).ok_or_else(|| {
-            let from = match v {
-                LuaValue::Integer(_) | LuaValue::Number(_) => "double".to_owned(),
-                LuaValue::UserData(u) => u
-                    .borrow::<crate::types::enums::LEnumItem>()
-                    .map_or_else(|_| type_name(v), |item| item.enum_name().to_owned()),
-                v => type_name(v),
-            };
-            ScriptError(format!("Unable to cast {from} to {enum_name}"))
-        })
+        crate::types::enums::item_value(lua, self.get(i), enum_name)
+            .ok_or_else(|| self.cast_error(i, enum_name))
     }
 
     pub(crate) fn string(&self, i: usize) -> ApiResult<String> {
@@ -205,6 +233,20 @@ impl Args {
     /// Lua truthiness, as Roblox uses for optional boolean arguments.
     pub(crate) fn truthy(&self, i: usize) -> bool {
         !matches!(self.get(i), LuaValue::Nil | LuaValue::Boolean(false))
+    }
+
+    /// A `bool` parameter as Roblox casts it: `default` when nil or left
+    /// out, a boolean as itself, anything else `Unable to cast string to
+    /// bool` (measured on `HttpService:GenerateGUID("x")`).
+    pub(crate) fn bool_or(&self, i: usize, default: bool) -> ApiResult<bool> {
+        match self.get(i) {
+            LuaValue::Nil => Ok(default),
+            LuaValue::Boolean(b) => Ok(*b),
+            v => Err(ScriptError(format!(
+                "Unable to cast {} to bool",
+                cast_name(v)
+            ))),
+        }
     }
 
     /// An `Object` parameter as Roblox casts it: a missing argument errors,

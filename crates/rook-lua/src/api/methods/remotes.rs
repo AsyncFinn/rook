@@ -17,6 +17,7 @@ pub(crate) fn native(owner: &str, name: &str) -> Option<RawMethod> {
         ("RemoteEvent" | "UnreliableRemoteEvent", "FireServer") => fire_server,
         ("RemoteEvent" | "UnreliableRemoteEvent", "FireClient") => fire_client,
         ("RemoteEvent" | "UnreliableRemoteEvent", "FireAllClients") => fire_all_clients,
+        ("Player", "GetNetworkPing") => network_ping,
         _ => return None,
     })
 }
@@ -43,6 +44,13 @@ pub(crate) fn luau_source(owner: &str, name: &str) -> Option<&'static str> {
         }
         _ => return None,
     })
+}
+
+/// The player's round-trip time in seconds. A session's server and clients
+/// share one process and messages cross between them within a step, so
+/// nothing is added on top of the step itself.
+fn network_ping(lua: &Lua, _: InstanceId, _: &Args) -> ApiResult<Outcome> {
+    Outcome::ret(lua, 0.0)
 }
 
 fn is_client(lua: &Lua) -> bool {

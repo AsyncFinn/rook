@@ -124,27 +124,6 @@ fn is_client(lua: &Lua, _: InstanceId, _: &Args) -> ApiResult<Outcome> {
     Outcome::ret(lua, with_world(lua, |w| w.is_client))
 }
 
-pub(super) fn get_minutes_after_midnight(
-    lua: &Lua,
-    this: InstanceId,
-    _: &Args,
-) -> ApiResult<Outcome> {
-    let hours = with_world(lua, |w| w.dom.clock_time(this));
-    Outcome::ret(lua, hours * 60.0)
-}
-
-pub(super) fn set_minutes_after_midnight(
-    lua: &Lua,
-    this: InstanceId,
-    a: &Args,
-) -> ApiResult<Outcome> {
-    let minutes = a.number(0)?;
-    mutate(lua, |w| {
-        crate::api::properties::set_lighting_hours(w, this, minutes / 60.0)
-    })?;
-    Outcome::ret(lua, ())
-}
-
 #[expect(
     clippy::match_same_arms,
     reason = "a row per member: members that behave alike stay listed apart"
@@ -163,8 +142,6 @@ pub(super) fn native(owner: &str, name: &str) -> Option<RawMethod> {
         ("RunService", "IsServer") => is_server,
         ("RunService", "IsClient") => is_client,
         ("Teams", "GetTeams") => get_teams,
-        ("Lighting", "GetMinutesAfterMidnight") => get_minutes_after_midnight,
-        ("Lighting", "SetMinutesAfterMidnight") => set_minutes_after_midnight,
         _ => return None,
     })
 }

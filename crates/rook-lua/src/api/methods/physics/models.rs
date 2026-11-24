@@ -1,7 +1,7 @@
 use mlua::Lua;
 use rook_dom::{DomError, InstanceId};
 use rook_physics::assembly::{self};
-use rook_types::{CFrame, Value, Vector3};
+use rook_types::{CFrame, NumberRange, NumberSequence, NumberSequenceKeypoint, Value, Vector3};
 
 use crate::api::instance::{settle_joints, settle_joints_within};
 use crate::api::methods::{RawMethod, mutate};
@@ -225,6 +225,235 @@ pub(super) fn get_mass(lua: &Lua, this: InstanceId, _: &Args) -> ApiResult<Outco
     Outcome::ret(lua, f64::from(mass))
 }
 
+/// The model's scale factor, its `Scale` property (saved as `ScaleFactor`),
+/// 1 until `ScaleTo` changes it.
+fn scale_of(w: &World, model: InstanceId) -> f32 {
+    w.dom.float_property(model, "Scale").unwrap_or(1.0)
+}
+
+pub(super) fn get_scale(lua: &Lua, this: InstanceId, _: &Args) -> ApiResult<Outcome> {
+    Outcome::ret(lua, f64::from(with_world(lua, |w| scale_of(w, this))))
+}
+
+/// Scales the model about its pivot by `new / current` (creator-docs
+/// Model.ScaleTo; measured in Studio 0.748): parts' sizes, pivot offsets
+/// and offsets from the pivot, the offsets of attachments, bones, joints
+/// and weld constraints, meshes' offsets and file meshes' scales (a
+/// primitive mesh already scales with its part), models inside, whose
+/// pivots move and whose `Scale` scales too, and [`SCALED_LENGTHS`].
+pub(super) fn scale_to(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<Outcome> {
+    let new = a.number(0)? as f32;
+    // Measured in Studio 0.748: NaN changes nothing; zero and below raise.
+    // Inference: infinity is ignored like NaN.
+    if new.is_nan() || new == f32::INFINITY {
+        return Outcome::ret(lua, ());
+    }
+    if new <= 0.0 {
+        return Err(ScriptError(
+            "Only positive non-zero scale values are allowed.".into(),
+        ));
+    }
+    settle_joints_within(lua, this);
+    mutate(lua, |w| {
+        // A scale that isn't positive can't be divided by; Inference: it
+        // counts as 1 (`ScaleTo` never stores one).
+        let old = Some(scale_of(w, this)).filter(|s| *s > 0.0).unwrap_or(1.0);
+        let r = new / old;
+        let pivot = pivot_of(w, this);
+        let scale_offset = |c: CFrame| CFrame {
+            position: c.position * r,
+            ..c
+        };
+        let mut moves = Vec::new();
+        for d in w.dom.descendants(this) {
+            if w.dom.is_a(d, "BasePart") {
+                let size = (w.dom)
+                    .read_property(d, part_ids().size, Value::as_vector3)
+                    .unwrap_or(glam::Vec3::ONE);
+                w.dom
+                    .set_property(d, part_ids().size, Value::Vector3(Vector3(size * r)))?;
+                if let Some(c) = w.dom.cframe_property(d, "PivotOffset") {
+                    w.dom
+                        .set_property_by_name(d, "PivotOffset", Value::CFrame(scale_offset(c)))?;
+                }
+                let c = part_cframe(w, d);
+                let local = scale_offset(pivot.to_object_space(c));
+                moves.push((d, pivot.to_world_space(local)));
+            } else if w.dom.is_a(d, "Model") {
+                if let Some(c) = w.dom.optional_cframe_property(d, "WorldPivotData") {
+                    let moved = pivot.to_world_space(scale_offset(pivot.to_object_space(c)));
+                    w.dom.set_property_by_name(
+                        d,
+                        "WorldPivotData",
+                        Value::OptionalCFrame(Some(moved)),
+                    )?;
+                }
+                let inner = scale_of(w, d);
+                w.dom
+                    .set_property_by_name(d, "Scale", Value::Float32(inner * r))?;
+            } else if w.dom.is_a(d, "WeldConstraint") {
+                // Part1's pose against Part0, which the move below holds
+                // the parts to.
+                if let Some(c) = w.dom.cframe_property(d, "CFrame0") {
+                    w.dom
+                        .set_property_by_name(d, "CFrame0", Value::CFrame(scale_offset(c)))?;
+                }
+            } else if w.dom.is_a(d, "Attachment") {
+                if let Some(c) = w.dom.cframe_property(d, "CFrame") {
+                    w.dom
+                        .set_property_by_name(d, "CFrame", Value::CFrame(scale_offset(c)))?;
+                }
+            } else if w.dom.is_a(d, "JointInstance") {
+                for joint in ["C0", "C1"] {
+                    if let Some(c) = w.dom.cframe_property(d, joint) {
+                        w.dom
+                            .set_property_by_name(d, joint, Value::CFrame(scale_offset(c)))?;
+                    }
+                }
+            } else if w.dom.is_a(d, "DataModelMesh") {
+                let file = w.dom.class_name(d) == "FileMesh"
+                    || w.dom.enum_item_property(d, "MeshType") == Some("FileMesh");
+                let props: &[&str] = if file {
+                    &["Scale", "Offset"]
+                } else {
+                    &["Offset"]
+                };
+                for &prop in props {
+                    if let Some(v) = w.dom.vector3_property(d, prop) {
+                        w.dom
+                            .set_property_by_name(d, prop, Value::Vector3(Vector3(v * r)))?;
+                    }
+                }
+            }
+            for &(class, props) in SCALED_LENGTHS {
+                if w.dom.is_a(d, class) {
+                    for &prop in props {
+                        scale_property(w, d, prop, r)?;
+                    }
+                }
+            }
+            if w.dom.is_a(d, "Humanoid") {
+                scale_property(w, d, "JumpPower", r.sqrt())?;
+            }
+        }
+        assembly::move_parts(&mut w.dom, moves)?;
+        w.dom
+            .set_property_by_name(this, "Scale", Value::Float32(new))
+    })?;
+    Outcome::ret(lua, ())
+}
+
+/// Lengths, distances and speeds in a model that `ScaleTo` scales by the
+/// factor, as measured in Studio 0.748 with `ScaleTo(2)`; a Humanoid's
+/// `JumpPower` scales by its square root (50 read 70.71), so the height it
+/// reaches scales by the factor. A BillboardGui's `Size` and a Light's
+/// `Range` stay as they are. Inference: CylindricalConstraint's limits
+/// scale as PrismaticConstraint's (both are SlidingBallConstraints), a
+/// Beam's `CurveSize1` as its `CurveSize0`, and a ParticleEmitter's `Size`
+/// envelopes with its sizes.
+const SCALED_LENGTHS: &[(&str, &[&str])] = &[
+    ("RopeConstraint", &["Length", "Thickness"]),
+    ("RodConstraint", &["Length", "Thickness"]),
+    (
+        "SpringConstraint",
+        &["FreeLength", "Radius", "MinLength", "MaxLength"],
+    ),
+    ("SlidingBallConstraint", &["UpperLimit", "LowerLimit"]),
+    ("ParticleEmitter", &["Size", "Speed", "Acceleration"]),
+    ("Fire", &["Size"]),
+    ("Beam", &["Width0", "Width1", "CurveSize0", "CurveSize1"]),
+    ("Trail", &["MaxLength"]),
+    ("Texture", &["StudsPerTileU", "StudsPerTileV"]),
+    ("Sound", &["RollOffMinDistance", "RollOffMaxDistance"]),
+    ("BillboardGui", &["StudsOffset", "MaxDistance"]),
+    ("Humanoid", &["HipHeight", "WalkSpeed", "JumpHeight"]),
+];
+
+/// Multiplies `d`'s number, Vector3, NumberRange or NumberSequence `prop`
+/// by `r`, keeping its type.
+fn scale_property(w: &mut World, d: InstanceId, prop: &str, r: f32) -> Result<(), DomError> {
+    let scaled = w.dom.read_by_name(d, prop, |v| {
+        Some(match v {
+            Value::Float32(x) => Value::Float32(x * r),
+            Value::Float64(x) => Value::Float64(x * f64::from(r)),
+            Value::Vector3(v) => Value::Vector3(Vector3(v.0 * r)),
+            Value::NumberRange(n) => Value::NumberRange(NumberRange {
+                min: n.min * r,
+                max: n.max * r,
+            }),
+            Value::NumberSequence(s) => Value::NumberSequence(NumberSequence {
+                keypoints: (s.keypoints.iter())
+                    .map(|k| NumberSequenceKeypoint {
+                        value: k.value * r,
+                        envelope: k.envelope * r,
+                        ..*k
+                    })
+                    .collect(),
+            }),
+            _ => return None,
+        })
+    });
+    match scaled {
+        Some(v) => w.dom.set_property_by_name(d, prop, v),
+        None => Ok(()),
+    }
+}
+
+/// `WorldRoot:BulkMoveTo(parts, cframes, eventMode)`: each part moves as
+/// setting its CFrame would, taking its assembly along, in one change set,
+/// with the errors measured in Studio 0.748 (entries that aren't Instances
+/// first, then the lengths, the parts and the CFrames). Approximation:
+/// `eventMode` is checked but changes are signalled as any move's.
+pub(super) fn bulk_move_to(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<Outcome> {
+    let parts = a.instances(0)?;
+    if !a.get(2).is_nil() {
+        a.enum_value(lua, 2, "BulkMoveMode")?;
+    }
+    let mlua::Value::Table(list) = a.get(1) else {
+        return Err(a.wrong(1, "table"));
+    };
+    let values = list
+        .sequence_values::<mlua::Value>()
+        .collect::<mlua::Result<Vec<_>>>()?;
+    if parts.len() != values.len() {
+        return Err(ScriptError(format!(
+            "Length of part list ({}) and length of CFrame list ({}) do not match.",
+            parts.len(),
+            values.len()
+        )));
+    }
+    let not_part = with_world(lua, |w| {
+        (parts.iter().enumerate())
+            .find(|(_, p)| !w.dom.is_a(**p, "BasePart"))
+            .map(|(i, p)| (i, w.dom.class_name(*p).to_owned()))
+    });
+    if let Some((i, class)) = not_part {
+        return Err(ScriptError(format!(
+            "Can only call BulkMoveTo on BaseParts, partList[{}] is a {class}.",
+            i + 1
+        )));
+    }
+    let mut cframes = Vec::with_capacity(values.len());
+    for (i, v) in values.iter().enumerate() {
+        match v {
+            mlua::Value::UserData(u) if u.borrow::<LCFrame>().is_ok() => {
+                cframes.push(u.borrow::<LCFrame>()?.0);
+            }
+            v => {
+                return Err(ScriptError(format!(
+                    "CFrame list must only contain CFrames, cframeList[{}] is a {}.",
+                    i + 1,
+                    crate::runtime::ctx::args::type_name(v)
+                )));
+            }
+        }
+    }
+    mutate(lua, |w| {
+        assembly::move_parts(&mut w.dom, parts.into_iter().zip(cframes))
+    })?;
+    Outcome::ret(lua, ())
+}
+
 pub(super) fn native(owner: &str, name: &str) -> Option<RawMethod> {
     Some(match (owner, name) {
         ("BasePart", "GetRenderCFrame") => get_render_cframe,
@@ -237,6 +466,9 @@ pub(super) fn native(owner: &str, name: &str) -> Option<RawMethod> {
         ("Model", "MoveTo" | "move" | "moveTo") => model_move_to,
         ("Model", "GetExtentsSize" | "GetModelSize") => get_extents_size,
         ("Model", "GetBoundingBox") => get_bounding_box,
+        ("WorldRoot", "BulkMoveTo") => bulk_move_to,
+        ("Model", "GetScale") => get_scale,
+        ("Model", "ScaleTo") => scale_to,
         ("BasePart", "GetMass" | "getMass") => get_mass,
         _ => return None,
     })

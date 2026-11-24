@@ -1,0 +1,109 @@
+-- studio 0.748.0.7481526
+-- signals: deferred
+encode nil ok null
+encode no args error Argument 1 missing or nil
+encode true ok true
+encode string ok "hi"
+encode 0 ok 0
+encode -0 ok -0
+encode 1 ok 1
+encode 1.5 ok 1.5
+encode 0.1 ok 0.1
+encode 1/3 ok 0.3333333333333333
+encode 1e-7 ok 1e-7
+encode 123456789012 ok 123456789012
+encode 2^53 ok 9007199254740992
+encode 2^63 ok 9223372036854776000
+encode 1e21 ok 1e21
+encode 1e300 ok 1e300
+encode inf ok {"m":null,"t":"numeric","v":"inf"}
+encode -inf ok {"m":null,"t":"numeric","v":"-inf"}
+encode nan ok {"m":null,"t":"numeric","v":"nan"}
+encode quote backslash slash ok "a\"b\\c/d"
+encode controls ok "\n\r\t\b\f"
+encode nul ok "a\u0000b"
+encode \1 ok "\u0001"
+encode \127 ok "\127"
+encode utf8 ok "\195\169\226\130\172\240\159\152\128"
+encode bad utf8 error Can't convert to JSON
+encode Vector3 ok null
+encode in array Vector3 ok [null]
+encode in array function ok [null]
+encode in array Instance ok [null]
+encode in array EnumItem ok [null]
+encode in array buffer ok [{"m":null,"t":"buffer","base64":"AA=="}]
+encode function ok null
+encode Instance ok null
+encode EnumItem ok null
+encode in object Color3 ok {"a":null}
+encode in object thread ok {"a":null}
+encode bool key error Invalid table key type used
+encode table key ok {"<Table> (table: <address>)":1}
+encode Vector3 key ok {"<Vector3> (1, 1, 1)":1}
+encode 1.5 key ok {"1":1}
+encode -1 key ok {"-1":1}
+encode inf key ok {"-9223372036854775808":1}
+encode far key ok {"1000":1}
+encode 1 and far ok [1]
+encode trailing nil ok [1,2]
+decode no args error Argument 1 missing or nil
+decode nil error Argument 1 missing or nil
+decode number arg ok number 5
+decode table arg ok {}
+decode empty error Can't parse JSON
+decode spaces error Can't parse JSON
+decode null ok nil nil
+decode true ok boolean true
+decode 5 ok number 5
+decode padded ok number 5
+decode string ok string x
+decode two values error Can't parse JSON
+decode null in array ok {number:1=number 1, number:3=number 3}
+decode null last ok {number:1=number 1}
+decode null in object ok {}
+decode empty object ok {}
+decode empty array ok {}
+decode number key ok {string:1=string a}
+decode duplicate keys ok {string:a=number 2}
+decode -0 ok number 0
+decode 1e999 error Can't parse JSON
+decode -1e999 error Can't parse JSON
+decode 1e-999 ok number 0
+decode big int ok number 12345678901234567000
+decode 2^53+1 ok number 9007199254740992
+decode 0.1 ok number 0.1
+decode leading zero error Can't parse JSON
+decode leading plus error Can't parse JSON
+decode bare dot error Can't parse JSON
+decode NaN error Can't parse JSON
+decode Infinity error Can't parse JSON
+decode hex error Can't parse JSON
+decode escapes ok string a\10\9"/\
+decode unicode escape ok string \195\169
+decode surrogate pair ok string \240\159\152\128
+decode lone surrogate error Can't parse JSON
+decode nul escape ok string a\0b
+decode raw newline error Can't parse JSON
+decode bad escape error Can't parse JSON
+decode raw utf8 ok string \195\169
+decode bad utf8 ok string \255
+decode trailing comma error Can't parse JSON
+decode object trailing comma error Can't parse JSON
+decode single quotes error Can't parse JSON
+decode bare key error Can't parse JSON
+decode unclosed error Can't parse JSON
+decode comment error Can't parse JSON
+decode word error Can't parse JSON
+round trip number keys ok {"1":1}
+round trip array ok [1,[2,[]]]
+UrlEncode ok a%20b%26c%3Dd%2F%C3%A9%7E%2D%5F%2E%2A%27%28%29%21%2B
+UrlEncode number ok 5
+UrlEncode nil error Argument 1 missing or nil
+UrlEncode empty ok 
+GUID braces 38 true false
+GUID plain 36 true false
+GUID version 4 true
+GUID true {
+GUID nil {
+GUID string error Unable to cast string to bool
+GUID differ true

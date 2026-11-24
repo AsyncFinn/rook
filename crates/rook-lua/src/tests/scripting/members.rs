@@ -148,3 +148,31 @@ fn audio_player_asset_id_is_asset() {
         ],
     );
 }
+
+/// Measured in Studio 0.748: an instance of another class as `self` is no
+/// `self` at all, so `player.Kick(workspace)` can't kick anything.
+#[test]
+fn a_member_function_needs_self_of_its_own_class() {
+    expect(
+        r#"
+        local p = Instance.new("Part")
+        local sky = Instance.new("Sky")
+        local function try(f, ...)
+            print((select(2, pcall(f, ...))))
+        end
+        try(p.ClearAllChildren, Instance.new("Folder"))
+        try(p.BreakJoints, workspace)
+        try(p.BreakJoints, nil)
+        try(workspace.GetServerTimeNow, sky)
+        print(pcall(workspace.FindFirstChild, p, "x"))
+        "#,
+        0,
+        &[
+            "nil",
+            "Expected ':' not '.' calling member function BreakJoints",
+            "Expected ':' not '.' calling member function BreakJoints",
+            "Expected ':' not '.' calling member function GetServerTimeNow",
+            "true nil",
+        ],
+    );
+}

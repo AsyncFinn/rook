@@ -135,9 +135,7 @@ pub(crate) fn write_property(
         .find_canonical_property(class, name)
         .ok_or_else(|| format!("{name} is not a property"))?;
     let converted = from_lua(lua, value, prop.ty)?;
-    if let Some(e) = with_world(lua, |w| {
-        properties::wrong_ref_class(w, id, name, &converted)
-    }) {
+    if let Some(e) = with_world(lua, |w| properties::rejected(w, id, name, &converted)) {
         return Ok(Err(ScriptError(e)));
     }
     if name == "Parent" {
