@@ -252,5 +252,11 @@ mod tests {
             answer_failure(&answer(401, 11), 200).kind,
             FailureKind::Forbidden
         );
+        assert!(being_generated(&answer_failure(&answer(406, 21), 200)));
+        assert!(!being_generated(&answer_failure(&answer(404, 15), 200)));
+        assert!(!being_generated(&Failure::new(
+            FailureKind::Network,
+            "timed out"
+        )));
     }
 }

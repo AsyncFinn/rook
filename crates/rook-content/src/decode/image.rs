@@ -148,27 +148,17 @@ impl Image {
     /// PNG); only textures on surfaces come larger, transcoded.
     pub fn decode_gui(bytes: &[u8]) -> Result<Self, ImageError> {
         if ImageFormat::sniff(bytes) == Some(ImageFormat::Ktx2)
-            && let Some(mut image) = Self::from_ktx2_chain(bytes)?
+            && let Some(image) = Self::from_ktx2_chain(bytes)?
         {
-            while image.width.max(image.height) > GUI_MAX_SIZE && image.mips.len() > 1 {
-                image.mips.remove(0);
-                image.width = (image.width / 2).max(1);
-                image.height = (image.height / 2).max(1);
-            }
-            return Ok(image);
+            return Ok(image.decompressed(GUI_MAX_SIZE));
         }
         let (mut rgba, format) = decode_rgba(bytes)?;
-        let (fit_w, fit_h) = gui_size(rgba.dimensions());
-        if (fit_w, fit_h) != rgba.dimensions() {
-            rgba = ::image::imageops::resize(
-                &rgba,
-                fit_w,
-                fit_h,
-                ::image::imageops::FilterType::Triangle,
-            );
+        let fit = gui_size(rgba.dimensions());
+        if fit != rgba.dimensions() {
+            rgba = fit_rgba(rgba, fit);
         }
         let mut image = Self::from_rgba(rgba, format, GUI_MAX_SIZE)?;
-        image.gui_size = (fit_w, fit_h);
+        image.gui_size = fit;
         Ok(image)
     }
 
@@ -249,6 +239,32 @@ pub fn gui_size((width, height): (u32, u32)) -> (u32, u32) {
             .max(1) as u32
     };
     (scale(width), scale(height))
+}
+
+/// `rgba` resized to `(width, height)`, its colors weighted by alpha so
+/// clear pixels don't darken the edges next to them.
+fn fit_rgba(mut rgba: ::image::RgbaImage, (width, height): (u32, u32)) -> ::image::RgbaImage {
+    let scale = |p: &mut ::image::Rgba<u8>, up: bool| {
+        let a = u32::from(p[3]);
+        for c in &mut p.0[..3] {
+            *c = if up {
+                (u32::from(*c) * 255 + a / 2)
+                    .checked_div(a)
+                    .map_or(0, |v| v.min(255) as u8)
+            } else {
+                ((u32::from(*c) * a + 127) / 255) as u8
+            };
+        }
+    };
+    rgba.pixels_mut().for_each(|p| scale(p, false));
+    let mut out = ::image::imageops::resize(
+        &rgba,
+        width,
+        height,
+        ::image::imageops::FilterType::Triangle,
+    );
+    out.pixels_mut().for_each(|p| scale(p, true));
+    out
 }
 
 /// The largest side GUI measures an image in ([`gui_size`]).

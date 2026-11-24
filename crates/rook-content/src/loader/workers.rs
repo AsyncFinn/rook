@@ -2,6 +2,8 @@
 //! decoders that turn what they fetched into what was wanted.
 
 use super::*;
+use std::sync::mpsc::{RecvTimeoutError, SendError};
+use std::time::Duration;
 
 #[derive(Debug)]
 pub(super) struct Workers {
@@ -178,10 +180,69 @@ pub(super) fn queue_decode(job: DecodeJob, priority: f32) {
     pool.push(NEXT.fetch_add(1, Ordering::Relaxed), job, priority);
 }
 
+/// How long before a texture Roblox is still making is asked for again
+/// (Studio 0.748 waited two seconds, then drew the upload).
+const BEING_GENERATED_RETRY: Duration = Duration::from_secs(2);
+
+type Retry = (Instant, Arc<Queue<Job, ()>>, Job, f32);
+
+/// Put `job` back on `jobs` once `BEING_GENERATED_RETRY` has passed, at
+/// `priority`. One thread, started the first time, waits out every delay,
+/// so no fetcher sits idle meanwhile.
+fn retry_later(jobs: &Arc<Queue<Job, ()>>, job: Job, priority: f32) {
+    static RETRIES: OnceLock<Mutex<Sender<Retry>>> = OnceLock::new();
+    let sender = RETRIES.get_or_init(|| {
+        let (tx, rx) = channel::<Retry>();
+        #[expect(
+            clippy::disallowed_types,
+            reason = "the content cache, install lookup and decode workers are rook-platform's known exception (docs/design/architecture.md#crate-layout)"
+        )]
+        let spawned = std::thread::Builder::new()
+            .name("rook-content-retry".into())
+            .spawn(move || {
+                let mut waiting: Vec<Retry> = Vec::new();
+                loop {
+                    let now = Instant::now();
+                    let (due, later): (Vec<_>, Vec<_>) =
+                        waiting.drain(..).partition(|r| r.0 <= now);
+                    waiting = later;
+                    for (_, jobs, job, priority) in due {
+                        jobs.push(job, (), priority);
+                    }
+                    let next = waiting.iter().map(|r| r.0).min();
+                    let got = match next {
+                        Some(at) => rx.recv_timeout(at.saturating_duration_since(now)),
+                        None => rx.recv().map_err(|_| RecvTimeoutError::Disconnected),
+                    };
+                    match got {
+                        Ok(retry) => waiting.push(retry),
+                        Err(RecvTimeoutError::Timeout) => {}
+                        Err(RecvTimeoutError::Disconnected) => return,
+                    }
+                }
+            });
+        if let Err(e) = spawned {
+            tracing::warn!(target: "content", "couldn't start the retry thread: {e}");
+        }
+        Mutex::new(tx)
+    });
+    let at = Instant::now() + BEING_GENERATED_RETRY;
+    let sent = sender
+        .lock()
+        .expect("retries")
+        .send((at, jobs.clone(), job, priority));
+    // No thread to wait: ask again now (the resolver then draws the
+    // upload).
+    if let Err(SendError((_, jobs, job, priority))) = sent {
+        jobs.push(job, (), priority);
+    }
+}
+
 pub(super) fn spawn_fetchers(resolver: &Arc<Resolver>) -> Workers {
     let jobs = Arc::new(Queue::new());
     let (done_tx, done) = channel();
     let resolver = resolver.clone();
+    let requeue = jobs.clone();
     spawn_threads(
         "rook-content",
         FETCHERS,
@@ -189,6 +250,10 @@ pub(super) fn spawn_fetchers(resolver: &Arc<Resolver>) -> Workers {
         move |job: Job, (), priority| {
             let fetched = resolver.resolve_as(&job.0, job.1);
             match fetched {
+                Err(f) if crate::resolver::being_generated(&f) => {
+                    retry_later(&requeue, job, priority);
+                    true
+                }
                 Ok(fetched) if needs_decoding(job.1, &fetched) => {
                     let done = done_tx.clone();
                     queue_decode(

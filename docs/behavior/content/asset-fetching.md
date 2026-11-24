@@ -311,7 +311,8 @@ fitted to 1024 × 1024 with the aspect kept, the size GUI measures them in
 (below). When there is no transcode it falls back to the upload as
 before: a refusal or an image that isn't one at once, remembered like
 other failures; a transcode being made after asking once more two seconds
-later, as Studio does, and it's asked for again next run. Kept assets
+later, as Studio does (the loader puts it back in its queue meanwhile
+rather than holding a fetcher), and it's asked for again next run. Kept assets
 stay as kept. An upload drawn on a surface is decoded up to 4096 a side,
 and kept in blocks past 1024.
 
@@ -361,10 +362,13 @@ texture's tile, even one larger than its face, a mesh's texture over the
 whole part, seen from the part's nearest point). Each grows towards that
 size a level every 0.35 s, fetching the packs a level needs when it gets
 there, so a 4096 texture seen up close from pack 0 reaches 4096 in seven
-steps, about 2.1 s. The scene keeps the entries whose textures can still
-grow as they're written, and looks over only those: once a texture is
-whole, at 4096, or its entry stops drawing it, it's left out, and a place
-with nothing left to grow pays nothing. The larger version replaces the
+steps, about 2.1 s. A texture growing when it leaves view stops at the
+level it reached, and larger levels that fail for now (a network failure,
+a pack being made) are asked for again two seconds later. The scene keeps
+the entries whose textures can still grow as they're written, and looks
+over only those: once a texture holds all its packs, or its entry stops
+drawing it, it's left out, and a place with nothing left to grow pays
+nothing. The larger version replaces the
 smaller in the renderer under the same image, so nothing is placed again.
 A screenshot goes straight to the sizes its camera wants. Effects and
 adornments load whole. Rook never lowers a texture and has no memory

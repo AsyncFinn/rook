@@ -30,7 +30,7 @@ pub mod packages;
 pub mod thumbnails;
 mod web;
 
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
@@ -38,6 +38,7 @@ use crate::materials::{self, TexturePack};
 use crate::{ContentRef, Failure, FailureKind, Fetched, MaterialMap, SourceKind, Want};
 use cache::{Cache, Cached};
 use delivery::Delivery;
+pub(crate) use delivery::being_generated;
 use install::Install;
 use packages::Packages;
 use thumbnails::Thumbnails;
@@ -63,6 +64,9 @@ pub struct Resolver {
     /// Failures this run that the disk cache doesn't keep (network errors,
     /// asset delivery being off), so they aren't retried every request.
     failed: Mutex<FxHashMap<ContentRef, Failure>>,
+    /// Asset ids whose texture transcode was being made when first asked
+    /// for this run: asked again, they fall back to the upload.
+    generating: Mutex<FxHashSet<u64>>,
 }
 
 impl Resolver {
@@ -107,6 +111,7 @@ impl Resolver {
             }),
             kept: config.kept_dir.as_deref().and_then(open_store),
             failed: Mutex::new(FxHashMap::default()),
+            generating: Mutex::new(FxHashSet::default()),
         }
     }
 
@@ -162,8 +167,14 @@ impl Resolver {
             return Err(f.clone());
         }
         let result = self.resolve_uncached(r, want);
+        // Not a texture being made, asked for again shortly, nor the
+        // larger levels of one that loaded (`Want::Texture(n)` past 0),
+        // asked for again as it grows: those don't fail the asset.
+        let larger = matches!(want, Want::Texture(n) if n != 0 && want != Want::WHOLE_TEXTURE);
         if let Err(f) = &result
             && matches!(f.kind, FailureKind::Network | FailureKind::Offline)
+            && !being_generated(f)
+            && !larger
         {
             self.failed
                 .lock()

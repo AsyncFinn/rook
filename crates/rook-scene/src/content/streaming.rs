@@ -70,13 +70,17 @@ impl SceneCache {
     }
 
     /// Note that entry `i` of `scene.parts` was written: it's looked over
-    /// while it draws a texture that may still grow.
+    /// while it draws a texture that can still grow.
     pub(crate) fn note_streaming(&mut self, i: usize) {
-        if surface_images(&self.scene.parts[i])
+        let files = &self.files;
+        let grows = surface_images(&self.scene.parts[i])
             .iter()
-            .any(Option::is_some)
-        {
+            .flatten()
+            .any(|(image, _)| files.can_grow(image));
+        if grows {
             self.streaming.insert(i);
+        } else {
+            self.streaming.remove(&i);
         }
     }
 
@@ -127,9 +131,7 @@ impl SceneCache {
             }
             true
         });
-        for (image, (size, distance)) in wanted {
-            self.files.want(image, size, distance);
-        }
+        self.files.want(&wanted);
     }
 }
 
@@ -240,7 +242,7 @@ mod tests {
 
     /// The scene looks over only the entries drawing a texture that can
     /// still grow: written ones join, released ones and those whose
-    /// textures can't grow (here, none loaded small) leave.
+    /// textures can't grow leave.
     #[test]
     fn looks_over_only_what_can_grow() {
         let mut dom = rook_dom::Dom::new();
@@ -251,20 +253,28 @@ mod tests {
         let mut cache = SceneCache::new(&dom, crate::Floors::default(), content, Vec3::ZERO);
         assert!(cache.streaming.is_empty(), "a plain part draws no texture");
         let i = cache.index[&part];
-        cache.scene.parts[i].texture = Some(ImageHash([1; 32]));
+        let (small, whole) = (ImageHash([1; 32]), ImageHash([2; 32]));
+        cache.files.stream_for_test(small, 32, false);
+        cache.files.stream_for_test(whole, 32, true);
+
+        cache.scene.parts[i].texture = Some(whole);
+        cache.note_streaming(i);
+        assert!(cache.streaming.is_empty(), "a texture that can't grow");
+        cache.scene.parts[i].texture = Some(small);
         cache.note_streaming(i);
         assert!(cache.streaming.contains(&i));
         cache.release(i);
         assert!(cache.streaming.is_empty());
 
         cache.note_streaming(i);
+        cache.files.stream_for_test(small, 4096, true);
         cache.set_view(
             &Camera::look_at(Vec3::new(0.0, 0.0, 10.0), Vec3::ZERO),
             800,
             600,
         );
         cache.stream_textures(true);
-        assert!(cache.streaming.is_empty(), "its texture can't grow");
+        assert!(cache.streaming.is_empty(), "its texture became whole");
     }
 
     #[test]

@@ -7,10 +7,6 @@ use super::*;
 use crate::Thumbnail;
 use crate::decode::image::ktx2;
 
-/// How long to wait before asking again for a texture being made
-/// (Studio 0.748 waited two seconds).
-const BEING_GENERATED_RETRY: Duration = Duration::from_secs(2);
-
 /// How long a stored thumbnail is used before the service is asked again:
 /// avatars and icons change, and Studio asks every session. A stale one
 /// still answers when the service can't be reached.
@@ -156,14 +152,15 @@ impl Resolver {
     /// An asset id wanted as a texture: Roblox's transcode of it, its mip
     /// packs from the smallest up to the first whose largest level is at
     /// least `1 << size` pixels across (or the last), joined
-    /// ([`ktx2::join`]). Each pack is kept in the cache on its own
-    /// (`asset-<id>-ktx2-p<n>`), so a larger request fetches only the
-    /// packs it adds, several in one request; if those fail, the packs it
-    /// has still make a smaller texture. Where there is no transcode (not
-    /// an image, refused without an account and no key) that is remembered
-    /// like any failure, so later runs go straight to the upload
-    /// ([`Self::download`]) until a key is saved; one Roblox is still
-    /// making is asked for again next run. A kept asset stays as kept.
+    /// ([`ktx2::join`]); [`Fetched::larger`] says whether larger levels
+    /// are left. Each pack is cached on its own (`asset-<id>-ktx2-p<n>`),
+    /// so a larger request fetches only the packs it adds. Packs that
+    /// failed for now (network, being made) fail a texture growing on
+    /// screen, to be asked for again; one wanted whole draws smaller. No
+    /// transcode (not an image, refused with no key) is remembered like
+    /// any failure and draws the upload ([`Self::download`]); one being
+    /// made fails the first time ([`being_generated`], the loader asks
+    /// again), then draws the upload. A kept asset stays as kept.
     pub(super) fn download_texture(&self, r: &ContentRef, size: u8) -> Result<Fetched, Failure> {
         let ContentRef::Asset { id, version } = r else {
             return self.download(r);
@@ -181,21 +178,21 @@ impl Resolver {
                 let Some(delivery) = &self.delivery else {
                     return self.download(r);
                 };
-                let mut answer = delivery.texture_packs(*id, *version, &[0]);
-                // Not made yet: Roblox starts making it on this request.
-                // Studio asks again after two seconds, then draws the
-                // upload.
-                if let Err(f) = &answer
-                    && delivery::being_generated(f)
-                {
-                    std::thread::sleep(BEING_GENERATED_RETRY);
-                    answer = delivery.texture_packs(*id, *version, &[0]);
-                }
-                match answer {
+                match delivery.texture_packs(*id, *version, &[0]) {
                     Ok(mut got) => {
                         let first = got.swap_remove(0);
                         self.keep_pack(&key(0), &first.bytes, &first.url);
                         (first.bytes, first.url, true)
+                    }
+                    // Not made yet: Roblox starts making it on this
+                    // request. The first time, the loader asks again two
+                    // seconds later, as Studio does; then it draws the
+                    // upload.
+                    Err(f)
+                        if delivery::being_generated(&f)
+                            && self.generating.lock().expect("generating").insert(*id) =>
+                    {
+                        return Err(f);
                     }
                     Err(f) => {
                         if f.kind.is_lasting()
@@ -212,9 +209,9 @@ impl Resolver {
         };
         let mut packs = vec![first];
         let invalid = |e: &dyn std::fmt::Display| Failure::new(FailureKind::Invalid, e.to_string());
-        let wanted = ktx2::File::read(&packs[0])
-            .map_err(|e| invalid(&e))?
-            .packs_up_to(1 << u32::from(size.min(31)));
+        let file = ktx2::File::read(&packs[0]).map_err(|e| invalid(&e))?;
+        let wanted = file.packs_up_to(1 << u32::from(size.min(31)));
+        let mut larger = usize::from(wanted) + 1 < file.packs().len();
         let mut missing = Vec::new();
         for pack in 1..=wanted {
             match self.cached_pack(&key(pack)) {
@@ -233,8 +230,13 @@ impl Resolver {
                     }
                     fetched_any = true;
                 }
+                // A pack being made or a network failure: a texture growing
+                // on screen asks again later; one wanted whole draws what
+                // it has.
+                Err(f) if !f.kind.is_lasting() && size != u8::MAX => return Err(f),
                 Err(f) => {
                     tracing::debug!(target: "content", "{r}'s larger levels didn't come ({f}); drawing it smaller");
+                    larger = false;
                 }
             }
         }
@@ -245,7 +247,9 @@ impl Resolver {
         } else {
             SourceKind::Cache
         };
-        Ok(Fetched::new(bytes, kind, url))
+        let mut fetched = Fetched::new(bytes, kind, url);
+        fetched.larger = larger && packs.len() == usize::from(wanted) + 1;
+        Ok(fetched)
     }
 
     /// A texture pack from the cache: `Some(Err(()))` when the cache

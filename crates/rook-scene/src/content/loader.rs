@@ -43,6 +43,9 @@ pub(crate) enum FileState {
 pub(crate) const STEP: Duration = Duration::from_millis(350);
 /// The largest level there is, as `Want::Texture`'s exponent (4096).
 pub(crate) const LARGEST: u8 = 12;
+/// How long before a texture whose larger levels failed for now (a
+/// network failure, a pack being made) tries again.
+const RETRY: Duration = Duration::from_secs(2);
 
 /// A texture that loaded small, by the hash it first loaded under.
 #[derive(Debug)]
@@ -55,8 +58,8 @@ struct Streamed {
     target: u8,
     /// Its largest level's longer side now.
     side: u32,
-    /// It has no larger version: the last one asked for came smaller
-    /// than asked, or failed.
+    /// It has no larger levels to fetch: it holds them all, or they
+    /// can't come.
     whole: bool,
     loading: bool,
     /// When it may step again.
@@ -67,8 +70,7 @@ struct Streamed {
 
 impl Streamed {
     fn new(r: ContentRef, side: u32, now: Instant) -> Self {
-        // The level its largest is at: pack 0's 32 is 5.
-        let level = (u32::BITS - side.max(1).leading_zeros() - 1) as u8;
+        let level = level_of(side);
         Self {
             r,
             level,
@@ -138,25 +140,50 @@ impl Files {
         }
     }
 
+    /// Treat `hash` as a texture that loaded small at `side` with larger
+    /// levels to come, or with none (`whole`).
+    #[cfg(test)]
+    pub(crate) fn stream_for_test(&mut self, hash: ImageHash, side: u32, whole: bool) {
+        let mut s = Streamed::new(
+            ContentRef::Asset {
+                id: 1,
+                version: None,
+            },
+            side,
+            Instant::now(),
+        );
+        s.whole = whole;
+        self.streamed.insert(hash, s);
+    }
+
     /// Whether the texture under `hash` loaded small and can still come
     /// larger.
     pub(crate) fn can_grow(&self, hash: &ImageHash) -> bool {
         self.streamed.get(hash).is_some_and(Streamed::can_grow)
     }
 
-    /// Have a texture that loaded small (`Want::Texture(0)`) grow to at
-    /// least `1 << size` pixels across, its fetches behind files of a lower
-    /// `priority` ([`Files::step`] grows it). A smaller size than it was
-    /// wanted at before changes nothing: textures never shrink.
-    pub(crate) fn want(&mut self, hash: ImageHash, size: u8, priority: f32) {
-        let Some(s) = self.streamed.get_mut(&hash) else {
-            return;
-        };
-        s.priority = priority;
-        let size = size.min(LARGEST);
-        if s.can_grow() && size > s.target {
-            s.target = size;
-            self.stepping.insert(hash);
+    /// Have each texture that loaded small (`Want::Texture(0)`) in
+    /// `wanted` grow to at least `1 << size` pixels across, its fetches
+    /// behind files of a lower priority ([`Files::step`] grows it); those
+    /// growing but not in `wanted` (out of view) stop where they are.
+    /// Nothing shrinks: a size below what a texture holds keeps it.
+    pub(crate) fn want(&mut self, wanted: &FxHashMap<ImageHash, (u8, f32)>) {
+        for hash in &self.stepping {
+            if !wanted.contains_key(hash)
+                && let Some(s) = self.streamed.get_mut(hash)
+            {
+                s.target = s.level;
+            }
+        }
+        for (hash, &(size, priority)) in wanted {
+            let Some(s) = self.streamed.get_mut(hash) else {
+                continue;
+            };
+            s.priority = priority;
+            s.target = size.min(LARGEST).max(s.level);
+            if s.stepping() {
+                self.stepping.insert(*hash);
+            }
         }
     }
 
@@ -194,17 +221,26 @@ impl Files {
             return;
         };
         s.loading = false;
-        let Some(image) = outcome.ok().and_then(|f| f.image) else {
-            s.whole = true;
-            return;
-        };
-        let side = image.width.max(image.height);
-        if side < side_of(s.level) {
-            s.whole = true;
+        match outcome {
+            Ok(f) => {
+                s.whole = !f.larger;
+                if let Some(image) = f.image {
+                    let side = image.width.max(image.height);
+                    if side > s.side {
+                        s.side = side;
+                        self.upgraded.push((hash, image));
+                    }
+                }
+            }
+            // For now: back to what it holds, to step again later.
+            Err(f) if !f.kind.is_lasting() => {
+                s.level = level_of(s.side).min(s.level);
+                s.next = Instant::now() + RETRY;
+            }
+            Err(_) => s.whole = true,
         }
-        if side > s.side {
-            s.side = side;
-            self.upgraded.push((hash, image));
+        if !s.stepping() {
+            self.stepping.remove(&hash);
         }
     }
 
@@ -262,6 +298,7 @@ impl Files {
             let Some(key) = self.tickets.remove(&ticket) else {
                 continue;
             };
+            let larger = outcome.as_ref().is_ok_and(|f| f.larger);
             let loaded = outcome.and_then(|f| {
                 let hash = *f.hash.as_bytes();
                 let loaded = match key.1 {
@@ -273,7 +310,9 @@ impl Files {
                 };
                 loaded.ok_or_else(|| Failure::new(FailureKind::Invalid, "not a mesh or an image"))
             });
-            if let (Want::Texture(0), Ok(Loaded::Image(hash, image))) = (key.1, &loaded) {
+            if let (Want::Texture(0), Ok(Loaded::Image(hash, image)), true) =
+                (key.1, &loaded, larger)
+            {
                 self.streamed.entry(*hash).or_insert_with(|| {
                     Streamed::new(key.0.clone(), image.width.max(image.height), Instant::now())
                 });
@@ -297,6 +336,11 @@ impl Files {
 /// The side of a level, as `Want::Texture`'s exponent.
 fn side_of(level: u8) -> u32 {
     1u32.checked_shl(u32::from(level)).unwrap_or(u32::MAX)
+}
+
+/// The level a longer side of `side` is at (pack 0's 32 is 5).
+fn level_of(side: u32) -> u8 {
+    (u32::BITS - side.max(1).leading_zeros() - 1) as u8
 }
 
 #[cfg(test)]
@@ -357,6 +401,52 @@ mod tests {
         s.target = 12;
         assert_eq!(s.step(start, true), Some(12));
         assert!(s.stepping(), "until it arrives");
+    }
+
+    fn files() -> Files {
+        Files::new(Arc::new(Resolver::new(rook_content::Config::empty())))
+    }
+
+    /// Larger levels that failed for now (a network failure, a pack being
+    /// made) are asked for again later; ones that can't come leave it
+    /// whole.
+    #[test]
+    fn a_failed_step_tries_again_later() {
+        let mut files = files();
+        let hash = ImageHash([1; 32]);
+        files.stream_for_test(hash, 32, false);
+        let s = files.streamed.get_mut(&hash).unwrap();
+        (s.level, s.target, s.loading) = (6, 8, true);
+        files.stepping.insert(hash);
+        let network = Failure::new(FailureKind::Network, "timed out");
+        files.upgrade_done(hash, Err(network));
+        let s = &files.streamed[&hash];
+        assert_eq!((s.level, s.whole, s.loading), (5, false, false));
+        assert!(s.next > Instant::now() + STEP, "not before the retry");
+        assert!(files.stepping.contains(&hash));
+
+        files.streamed.get_mut(&hash).unwrap().loading = true;
+        let refused = Failure::new(FailureKind::Forbidden, "no");
+        files.upgrade_done(hash, Err(refused));
+        assert!(files.streamed[&hash].whole);
+        assert!(!files.stepping.contains(&hash));
+    }
+
+    /// Only what is in view grows: a texture growing when it leaves view
+    /// stops at the level it reached.
+    #[test]
+    fn leaving_view_stops_growing() {
+        let mut files = files();
+        let hash = ImageHash([1; 32]);
+        files.stream_for_test(hash, 32, false);
+        files.want(&FxHashMap::from_iter([(hash, (12, 1.0))]));
+        assert!(files.stepping.contains(&hash));
+        files.streamed.get_mut(&hash).unwrap().level = 7;
+        files.want(&FxHashMap::default());
+        assert_eq!(files.streamed[&hash].target, 7);
+        // Nothing shrinks: wanted smaller, it keeps its level.
+        files.want(&FxHashMap::from_iter([(hash, (6, 1.0))]));
+        assert_eq!(files.streamed[&hash].target, 7);
     }
 
     #[test]
