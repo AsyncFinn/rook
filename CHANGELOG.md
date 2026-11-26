@@ -5,6 +5,10 @@ Every release, newest first. How versions are numbered is in
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-11-26
+
+Checked against Roblox 0.744.0.
+
 - A long play session's memory stays flat. The server kept every change for a renderer and a mixer it doesn't have, and the window kept every frame's step time, so both grew for as long as the game ran.
 - A member's argument that doesn't cast names a table as `Array` or `Dictionary` in its error, and an EnumItem as its enum, as in Roblox. Rook named either by its type in some members' errors.
 - A member function called with an instance of another class in place of `self` raises `Expected ':' not '.'`, as in Roblox. Rook ran the member on whatever instance it was given. See [member lookup](docs/behavior/scripting/member-lookup.md#calling-a-member-function).
