@@ -213,8 +213,8 @@ mod tests {
 
     #[test]
     fn a_texture_is_sized_by_its_tile_even_past_the_face() {
-        // DB2's icons: a 1-stud part showing one 120-pixel cell of a
-        // 4096-pixel sheet, its tile 34 studs across.
+        // A sprite-sheet cell on a small part: a 1-stud part showing one
+        // 120-pixel cell of a 4096-pixel sheet, its tile 34 studs across.
         let tiled = |studs: f32| {
             let mut part = PartInstance::plain(
                 DrawShape::Part(rook_types::PartShape::Block),
