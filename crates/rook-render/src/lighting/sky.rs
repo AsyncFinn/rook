@@ -224,6 +224,14 @@ impl SkyCube {
         }
     }
 
+    /// Build the cube again next time if it was built from `hash`'s
+    /// image, which was replaced.
+    pub(crate) fn forget_image(&mut self, hash: ImageHash) {
+        if (self.built).is_some_and(|b| b.images.is_some_and(|faces| faces.contains(&hash))) {
+            self.built = None;
+        }
+    }
+
     /// Build the cube again if the sky has changed since it was built:
     /// from the skybox's `images` (as stored, with their hashes) once all
     /// six are up, else from the plain sky's colors (sRGB).

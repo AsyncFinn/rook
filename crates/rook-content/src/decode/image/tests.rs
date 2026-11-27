@@ -111,14 +111,77 @@ fn rejects_what_isnt_an_image() {
     ));
 }
 
+fn png_of(img: &::image::RgbaImage) -> Vec<u8> {
+    let mut bytes = Vec::new();
+    img.write_to(&mut Cursor::new(&mut bytes), ::image::ImageFormat::Png)
+        .unwrap();
+    bytes
+}
+
 #[test]
 fn halves_images_past_the_limit() {
-    let big = ::image::RgbaImage::from_pixel(2048, 4, ::image::Rgba([1, 2, 3, 255]));
-    let mut bytes = Vec::new();
-    big.write_to(&mut Cursor::new(&mut bytes), ::image::ImageFormat::Png)
-        .unwrap();
-    let img = Image::decode(&bytes).unwrap();
-    assert_eq!((img.width, img.height), (1024, 2));
+    let big = ::image::RgbaImage::from_pixel(8192, 4, ::image::Rgba([1, 2, 3, 255]));
+    let img = Image::decode(&png_of(&big)).unwrap();
+    assert_eq!((img.width, img.height), (4096, 2));
+    // GUI measures it fitted to 1024.
+    assert_eq!(img.gui_size, (1024, 1));
+}
+
+/// Past 1024 a texture is kept in blocks (BC3 where it's translucent);
+/// up to it, and decoded for its pixels, RGBA8 as before.
+#[test]
+fn keeps_large_uploads_in_blocks() {
+    let opaque = ::image::RgbaImage::from_pixel(2048, 8, ::image::Rgba([1, 2, 3, 255]));
+    let img = Image::decode_texture(&png_of(&opaque)).unwrap();
+    assert_eq!((img.width, img.encoding), (2048, Encoding::Bc1));
+    assert_eq!(img.mips.len(), 12);
+    let clear = ::image::RgbaImage::from_pixel(2048, 8, ::image::Rgba([1, 2, 3, 9]));
+    let img = Image::decode_texture(&png_of(&clear)).unwrap();
+    assert_eq!(img.encoding, Encoding::Bc3);
+    assert!(img.translucent);
+    let small = ::image::RgbaImage::from_pixel(1024, 8, ::image::Rgba([1, 2, 3, 255]));
+    assert_eq!(
+        Image::decode_texture(&png_of(&small)).unwrap().encoding,
+        Encoding::Rgba8
+    );
+    let pixels = Image::decode(&png_of(&opaque)).unwrap();
+    assert_eq!((pixels.width, pixels.encoding), (2048, Encoding::Rgba8));
+}
+
+/// A transcode holding every level is kept in its blocks, sized as
+/// uploaded; a single level is decoded to RGBA8 with Rook's own mips.
+#[test]
+fn keeps_transcoded_textures_in_blocks() {
+    let block = ktx2::tests::bc1_block(0xF800);
+    let chain = ktx2::tests::file(
+        131,
+        (8, 4),
+        &[block.repeat(2), block.clone(), block.clone(), block.clone()],
+        &[("RobloxOriginalWidth", "10"), ("RobloxOriginalHeight", "5")],
+        true,
+    );
+    let img = Image::decode(&chain).unwrap();
+    assert_eq!(
+        (img.width, img.height, img.format, img.encoding),
+        (8, 4, ImageFormat::Ktx2, Encoding::Bc1)
+    );
+    assert_eq!(img.mips.len(), 4);
+    assert_eq!(img.gui_size, (10, 5));
+    assert!(!img.translucent);
+    assert_eq!(img.average(), [255, 0, 0, 255]);
+
+    let level = ktx2::tests::file(131, (8, 8), &[block.repeat(4)], &[], false);
+    let img = Image::decode(&level).unwrap();
+    assert_eq!((img.encoding, img.mips.len()), (Encoding::Rgba8, 4));
+}
+
+/// Studio 0.748's measurements.
+#[test]
+fn gui_measures_images_fitted_to_1024() {
+    assert_eq!(gui_size((4096, 4096)), (1024, 1024));
+    assert_eq!(gui_size((1264, 632)), (1024, 512));
+    assert_eq!(gui_size((1000, 3)), (1000, 3));
+    assert_eq!(gui_size((3000, 1)), (1024, 1));
 }
 
 #[test]
@@ -128,4 +191,35 @@ fn rejects_zero_max_size() {
         Image::from_rgba(rgba, ImageFormat::Png, 0),
         Err(ImageError::Damaged("PNG", _))
     ));
+}
+
+/// GUI and the sky draw an upload fitted to 1024 × 1024, the aspect kept,
+/// in the size GUI measures rects in; only surface textures come larger.
+#[test]
+fn gui_images_fit_1024() {
+    let wide = ::image::RgbaImage::from_pixel(2048, 1000, ::image::Rgba([1, 2, 3, 255]));
+    let img = Image::decode_gui(&png_of(&wide)).unwrap();
+    assert_eq!((img.width, img.height), (1024, 500));
+    assert_eq!((img.encoding, img.gui_size), (Encoding::Rgba8, (1024, 500)));
+    let small = ::image::RgbaImage::from_pixel(300, 200, ::image::Rgba([1, 2, 3, 255]));
+    let img = Image::decode_gui(&png_of(&small)).unwrap();
+    assert_eq!(
+        (img.width, img.height, img.gui_size),
+        (300, 200, (300, 200))
+    );
+}
+
+/// A streamed texture is drawn from the level it has grown to: its
+/// smallest level at least that large, blocks kept whole.
+#[test]
+fn draws_from_a_level() {
+    let pixels = ::image::RgbaImage::from_pixel(256, 128, ::image::Rgba([1, 2, 3, 255]));
+    let img = Image::decode(&png_of(&pixels)).unwrap();
+    let from = img.from_level(64);
+    assert_eq!((from.width, from.height, from.mips.len()), (64, 32, 7));
+    assert_eq!(from.mips[0], img.mips[2]);
+    assert_eq!(img.from_level(4096).width, 256, "no larger than it is");
+    let blocks = img.compressed(Encoding::Bc1);
+    // 8 × 4 is whole blocks, 4 × 2 isn't.
+    assert_eq!(blocks.from_level(1).width, 8);
 }

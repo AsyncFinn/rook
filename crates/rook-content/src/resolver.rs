@@ -30,14 +30,15 @@ pub mod packages;
 pub mod thumbnails;
 mod web;
 
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
 use crate::materials::{self, TexturePack};
-use crate::{ContentRef, Failure, FailureKind, Fetched, MaterialMap, SourceKind};
+use crate::{ContentRef, Failure, FailureKind, Fetched, MaterialMap, SourceKind, Want};
 use cache::{Cache, Cached};
 use delivery::Delivery;
+pub(crate) use delivery::being_generated;
 use install::Install;
 use packages::Packages;
 use thumbnails::Thumbnails;
@@ -63,6 +64,9 @@ pub struct Resolver {
     /// Failures this run that the disk cache doesn't keep (network errors,
     /// asset delivery being off), so they aren't retried every request.
     failed: Mutex<FxHashMap<ContentRef, Failure>>,
+    /// Asset ids whose texture transcode was being made when first asked
+    /// for this run: asked again, they fall back to the upload.
+    generating: Mutex<FxHashSet<u64>>,
 }
 
 impl Resolver {
@@ -107,6 +111,7 @@ impl Resolver {
             }),
             kept: config.kept_dir.as_deref().and_then(open_store),
             failed: Mutex::new(FxHashMap::default()),
+            generating: Mutex::new(FxHashSet::default()),
         }
     }
 
@@ -150,12 +155,26 @@ impl Resolver {
     /// Resolve a reference, blocking on disk and network. The engine goes
     /// through a [`Loader`](crate::Loader) instead.
     pub fn resolve(&self, r: &ContentRef) -> Result<Fetched, Failure> {
+        self.resolve_as(r, Want::Bytes)
+    }
+
+    /// Resolve a reference for `want`: an asset id wanted as a texture
+    /// ([`Want::Texture`]) comes as Roblox transcodes it for textures where
+    /// there is such a transcode ([`Self::download_texture`]), else as
+    /// uploaded.
+    pub fn resolve_as(&self, r: &ContentRef, want: Want) -> Result<Fetched, Failure> {
         if let Some(f) = self.failed.lock().expect("failure memo").get(r) {
             return Err(f.clone());
         }
-        let result = self.resolve_uncached(r);
+        let result = self.resolve_uncached(r, want);
+        // Not a texture being made, asked for again shortly, nor the
+        // larger levels of one that loaded (`Want::Texture(n)` past 0),
+        // asked for again as it grows: those don't fail the asset.
+        let larger = matches!(want, Want::Texture(n) if n != 0 && want != Want::WHOLE_TEXTURE);
         if let Err(f) = &result
             && matches!(f.kind, FailureKind::Network | FailureKind::Offline)
+            && !being_generated(f)
+            && !larger
         {
             self.failed
                 .lock()
@@ -211,7 +230,7 @@ impl Resolver {
         })
     }
 
-    fn resolve_uncached(&self, r: &ContentRef) -> Result<Fetched, Failure> {
+    fn resolve_uncached(&self, r: &ContentRef, want: Want) -> Result<Fetched, Failure> {
         let asset = match r {
             ContentRef::Material(material, set, map) => {
                 let pack = materials::pack(*material, *set, *map).ok_or_else(|| {
@@ -263,6 +282,9 @@ impl Resolver {
                 FailureKind::Offline,
                 "asset delivery isn't in the provider order",
             ));
+        }
+        if let Want::Texture(size) = want {
+            return self.download_texture(&asset, size);
         }
         self.download(&asset)
     }

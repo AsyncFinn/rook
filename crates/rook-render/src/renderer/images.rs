@@ -252,6 +252,34 @@ impl Renderer {
         }
     }
 
+    /// Bind the images replaced by the last uploads anew wherever they
+    /// were bound: the table is made again already ([`Self::add_images`]),
+    /// and each set holding one is made again now, as are the GUI's
+    /// groups of it and the sky's cube if it's a skybox face.
+    pub(crate) fn rebind_replaced_images(&mut self) {
+        let replaced = self.images.take_replaced();
+        if replaced.is_empty() {
+            return;
+        }
+        let mut stale = Vec::new();
+        if let ImageBinding::Sets(groups) = &mut self.image_binding {
+            groups.retain(|set, _| {
+                let holds = set.iter().flatten().any(|h| replaced.contains(h));
+                if holds {
+                    stale.push(*set);
+                }
+                !holds
+            });
+        }
+        for set in stale {
+            self.ensure_group(set);
+        }
+        for hash in replaced {
+            self.gui.forget_image(hash);
+            self.sky_cube.forget_image(hash);
+        }
+    }
+
     /// The bind group of a draw's images: the table's, or the set's (the
     /// defaults' when it hasn't been made).
     pub(crate) fn group(&self, set: &ImageSet) -> &wgpu::BindGroup {

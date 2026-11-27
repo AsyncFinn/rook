@@ -248,6 +248,13 @@ impl GuiPass {
             .upload(device, queue, images, lights, (camera, view), size.1)
     }
 
+    /// Drop the bind groups of `hash`'s image, which was replaced: they're
+    /// made again with the new one when next drawn.
+    pub(crate) fn forget_image(&mut self, hash: ImageHash) {
+        self.images.forget_file(hash);
+        self.world.forget_file(hash);
+    }
+
     /// The ViewportFrames shown, with their pictures' sizes, and how many
     /// times that list changed.
     pub(crate) fn viewports(&self) -> (&[GuiViewport], u64) {

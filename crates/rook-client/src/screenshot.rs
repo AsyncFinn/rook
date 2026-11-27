@@ -18,7 +18,9 @@ pub fn screenshot(
     out: &Path,
 ) -> anyhow::Result<()> {
     // A screenshot isn't a frame: it waits for the place's mesh files
-    // and images, and their uploads.
+    // and images, and their uploads, its textures at the size the shot
+    // shows them.
+    scene.set_view(&camera, start.width, start.height);
     scene.load_all(game.view(), camera.position);
     // GUI laid out again around the images that arrived fires Changed,
     // and scripts answer it (Roblox's React GUI re-renders): a few

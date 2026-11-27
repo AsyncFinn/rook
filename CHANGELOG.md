@@ -5,6 +5,8 @@ Every release, newest first. How versions are numbered is in
 
 ## [Unreleased]
 
+- Textures on parts, decals and meshes draw as sharp as in Roblox: Rook fetches them as Roblox's client does, small first and sharper as they grow on screen, and keeps them compressed on the GPU. Rook downloaded every image as uploaded and blurred large ones to a quarter of their size. See [textures](docs/behavior/content/asset-fetching.md#textures).
+
 ## [0.6.0] - 2026-11-26
 
 Checked against Roblox 0.744.0.

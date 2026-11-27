@@ -213,6 +213,7 @@ impl Renderer {
             return;
         }
         self.add_images(&images);
+        self.rebind_replaced_images();
         let uploaded =
             (meshes.into_iter().map(File::Mesh)).chain(images.into_iter().map(File::Image));
         for (i, part) in self.waiting.take(uploaded) {

@@ -20,6 +20,7 @@ fn block_compressed_maps_draw_the_same_decoded() {
         encoding: Encoding::Rgba8,
         mips: mips(flat, 8, 8),
         translucent: false,
+        gui_size: (8, 8),
     }
     .compressed(Encoding::Bc1);
     let hash = ImageHash([5; 32]);
@@ -65,6 +66,7 @@ fn tilted_map(tilt: [f32; 2]) -> (ImageHash, Arc<Image>) {
         encoding: Encoding::Rgba8,
         mips: mips(texel.repeat(64), 8, 8),
         translucent: false,
+        gui_size: (8, 8),
     };
     (hash, Arc::new(map))
 }

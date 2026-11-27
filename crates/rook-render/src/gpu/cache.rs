@@ -95,6 +95,9 @@ pub(crate) struct GpuCache<K, T: Upload> {
     queued: FxHashSet<K>,
     /// Files handed over that nothing has drawn yet.
     parked: FxHashMap<K, Arc<T>>,
+    /// Keys whose GPU copy an upload replaced since [`Self::take_replaced`]
+    /// last took them.
+    replaced: Vec<K>,
 }
 
 impl<K: Copy + Eq + Hash, T: Upload> GpuCache<K, T> {
@@ -104,6 +107,7 @@ impl<K: Copy + Eq + Hash, T: Upload> GpuCache<K, T> {
             queue: VecDeque::new(),
             queued: FxHashSet::default(),
             parked: FxHashMap::default(),
+            replaced: Vec::new(),
         }
     }
 
@@ -154,6 +158,30 @@ impl<K: Copy + Eq + Hash, T: Upload> GpuCache<K, T> {
         true
     }
 
+    /// Put `file` in place of what `key` holds. A parked or queued file is
+    /// swapped for it; an uploaded one keeps drawing until `file` goes up
+    /// in its place, queued as any upload is. A key nothing was handed
+    /// over for is parked, as [`Self::park`] does.
+    pub(crate) fn replace(&mut self, key: K, file: Arc<T>) {
+        if let Some(parked) = self.parked.get_mut(&key) {
+            *parked = file;
+        } else if self.queued.contains(&key) {
+            if let Some(entry) = self.queue.iter_mut().find(|(k, _)| *k == key) {
+                entry.1 = file;
+            }
+        } else if self.ready.contains_key(&key) {
+            self.queued.insert(key);
+            self.queue.push_back((key, file));
+        } else {
+            self.parked.insert(key, file);
+        }
+    }
+
+    /// The keys whose GPU copy an upload replaced since the last call.
+    pub(crate) fn take_replaced(&mut self) -> Vec<K> {
+        std::mem::take(&mut self.replaced)
+    }
+
     /// Forget `key`'s parked file or queued upload, or take its GPU copy
     /// out.
     pub(crate) fn remove(&mut self, key: &K) -> Option<T::Gpu> {
@@ -168,12 +196,15 @@ impl<K: Copy + Eq + Hash, T: Upload> GpuCache<K, T> {
         !self.queue.is_empty()
     }
 
+    /// Whether `key` waits for its first upload (not a replacement: what
+    /// it replaces is there to draw meanwhile).
     pub(crate) fn is_queued(&self, key: &K) -> bool {
-        self.queued.contains(key)
+        self.queued.contains(key) && !self.ready.contains_key(key)
     }
 
     /// Upload queued files while `budget` lasts. Returns the keys
-    /// uploaded.
+    /// uploaded; a replaced GPU copy is dropped (wgpu keeps its texture
+    /// while bind groups still hold it).
     pub(crate) fn upload(&mut self, cx: &mut T::Context<'_>, budget: &mut UploadBudget) -> Vec<K> {
         let mut uploaded = Vec::new();
         while let Some((_, file)) = self.queue.front() {
@@ -183,7 +214,9 @@ impl<K: Copy + Eq + Hash, T: Upload> GpuCache<K, T> {
             let (key, file) = self.queue.pop_front().expect("front");
             self.queued.remove(&key);
             let gpu = file.upload(cx);
-            self.ready.insert(key, gpu);
+            if self.ready.insert(key, gpu).is_some() {
+                self.replaced.push(key);
+            }
             uploaded.push(key);
         }
         uploaded
@@ -266,5 +299,36 @@ mod tests {
             1,
             "an uploaded file isn't parked again"
         );
+    }
+
+    /// A replacement for an uploaded file goes up as any upload does,
+    /// what it replaces drawing until then, and a parked or queued one is
+    /// simply swapped.
+    #[test]
+    fn a_replaced_file_draws_once_uploaded() {
+        let mut cache: GpuCache<u32, Blob> = GpuCache::new();
+        cache.request(0, &Arc::new(Blob(1)));
+        cache.upload(&mut (), &mut UploadBudget::unlimited());
+        cache.replace(0, Arc::new(Blob(2)));
+        assert_eq!(cache.get(&0), Some(&1));
+        assert!(cache.has_queued() && !cache.is_queued(&0) && cache.claim(0));
+        assert!(cache.take_replaced().is_empty());
+        assert_eq!(cache.upload(&mut (), &mut UploadBudget::unlimited()), [0]);
+        assert_eq!(cache.get(&0), Some(&2));
+        assert_eq!(cache.take_replaced(), [0]);
+        assert!(cache.take_replaced().is_empty());
+
+        cache.park(1, Arc::new(Blob(3)));
+        cache.replace(1, Arc::new(Blob(4)));
+        cache.request(2, &Arc::new(Blob(5)));
+        cache.replace(2, Arc::new(Blob(6)));
+        cache.replace(3, Arc::new(Blob(7)));
+        assert!(cache.claim(1) && cache.claim(3));
+        cache.upload(&mut (), &mut UploadBudget::unlimited());
+        assert_eq!(
+            [1, 2, 3].map(|k| cache.get(&k).copied()),
+            [Some(4), Some(6), Some(7)]
+        );
+        assert!(cache.take_replaced().is_empty());
     }
 }

@@ -1,6 +1,7 @@
 //! Reading images (decal, texture and mesh texture files) into RGBA8 with
 //! a full mip chain, the layout the renderer uploads, or block-compressed
-//! ([`blocks`]: material textures).
+//! ([`blocks`]: material textures, Roblox's transcoded textures and large
+//! uploads).
 //!
 //! Formats are recognized by their bytes, not by a file name (an asset id
 //! has none): PNG, JPEG, BMP and DDS (DXT1, DXT3 and DXT5; the install's
@@ -21,9 +22,17 @@ pub use mips::mips;
 
 use std::io::Cursor;
 
-/// The largest side kept. Larger images are halved until they fit
-/// (Inference: Roblox stores uploaded images at 1024 at most).
-pub const MAX_SIZE: u32 = 1024;
+/// The largest side kept, Roblox's limit for uploads and the largest
+/// texture it renders (docs/behavior/content/asset-fetching.md#textures).
+/// Larger images are halved until they fit.
+pub const MAX_SIZE: u32 = 4096;
+
+/// Textures decoded with a side past this ([`Image::decode_texture`]) are
+/// kept block-compressed (BC1, or BC3 where they have transparency), as
+/// Roblox keeps every texture: a 4096 × 4096 image is 85 MB in RGBA8 with
+/// its mips and 11 to 22 MB in blocks. Smaller ones stay RGBA8, as they
+/// always have in Rook.
+pub const COMPRESS_OVER: u32 = 1024;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum ImageFormat {
@@ -86,6 +95,9 @@ pub struct Image {
     pub mips: Vec<Vec<u8>>,
     /// Whether any pixel is less than fully opaque.
     pub translucent: bool,
+    /// The size GUI measures the image in (`ImageRectOffset`,
+    /// `ImageRectSize`), whatever size its pixels are ([`gui_size`]).
+    pub gui_size: (u32, u32),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
@@ -97,9 +109,76 @@ pub enum ImageError {
 }
 
 impl Image {
+    /// An image, RGBA8 with Rook's mips, or in its blocks when it's a KTX2
+    /// texture holding every level (Roblox's transcode).
     pub fn decode(bytes: &[u8]) -> Result<Self, ImageError> {
+        if ImageFormat::sniff(bytes) == Some(ImageFormat::Ktx2)
+            && let Some(image) = Self::from_ktx2_chain(bytes)?
+        {
+            return Ok(image);
+        }
         let (rgba, format) = decode_rgba(bytes)?;
         Self::from_rgba(rgba, format, MAX_SIZE)
+    }
+
+    /// A texture for the GPU to sample only (what the loader decodes for
+    /// `Want::Texture`): as [`Self::decode`], but kept in blocks past
+    /// [`COMPRESS_OVER`]. What reads pixels itself (the install's surface
+    /// and effect textures) decodes with [`Self::decode`].
+    pub fn decode_texture(bytes: &[u8]) -> Result<Self, ImageError> {
+        let image = Self::decode(bytes)?;
+        if image.encoding == Encoding::Rgba8
+            && (image.width > COMPRESS_OVER || image.height > COMPRESS_OVER)
+        {
+            let encoding = if image.translucent {
+                Encoding::Bc3
+            } else {
+                Encoding::Bc1
+            };
+            return Ok(image.compressed(encoding));
+        }
+        Ok(image)
+    }
+
+    /// An image for GUI, the sky and other `Want::Image` uses: as
+    /// [`Self::decode`], fitted to [`GUI_MAX_SIZE`] (the aspect kept), the
+    /// size Roblox draws an upload at outside surfaces in the world. GUI
+    /// measures image rects in that size (`gui_size`), and asset delivery
+    /// stores uploads at it (a 4096 × 4096 decal's upload is a 1024 × 1024
+    /// PNG); only textures on surfaces come larger, transcoded.
+    pub fn decode_gui(bytes: &[u8]) -> Result<Self, ImageError> {
+        if ImageFormat::sniff(bytes) == Some(ImageFormat::Ktx2)
+            && let Some(image) = Self::from_ktx2_chain(bytes)?
+        {
+            return Ok(image.decompressed(GUI_MAX_SIZE));
+        }
+        let (mut rgba, format) = decode_rgba(bytes)?;
+        let fit = gui_size(rgba.dimensions());
+        if fit != rgba.dimensions() {
+            rgba = fit_rgba(rgba, fit);
+        }
+        let mut image = Self::from_rgba(rgba, format, GUI_MAX_SIZE)?;
+        image.gui_size = fit;
+        Ok(image)
+    }
+
+    /// A KTX2 texture holding every level (Roblox's transcode, its packs
+    /// joined), kept in its blocks; `None` when the file isn't one.
+    fn from_ktx2_chain(bytes: &[u8]) -> Result<Option<Self>, ImageError> {
+        let file = ktx2::File::read(bytes)?;
+        let Some((encoding, mips)) = file.chain()? else {
+            return Ok(None);
+        };
+        let translucent = blocks::translucent(encoding, &mips[0]);
+        Ok(Some(Self {
+            width: file.width,
+            height: file.height,
+            format: ImageFormat::Ktx2,
+            encoding,
+            mips,
+            translucent,
+            gui_size: gui_size(file.original_size().unwrap_or((file.width, file.height))),
+        }))
     }
 
     /// An image from decoded pixels, halved until neither side is over
@@ -115,6 +194,7 @@ impl Image {
                 "maximum size must be greater than zero".into(),
             ));
         }
+        let gui_size = gui_size(rgba.dimensions());
         while rgba.width() > max_size || rgba.height() > max_size {
             let (w, h) = (rgba.width(), rgba.height());
             let half = mips::downsample(&rgba, w, h);
@@ -134,13 +214,94 @@ impl Image {
             encoding: Encoding::Rgba8,
             mips: mips(level0, width, height),
             translucent,
+            gui_size,
         })
+    }
+
+    /// The image from its smallest level at least `side` pixels on its
+    /// longer side (or its largest), the levels above it left out: a
+    /// streamed texture drawn only as far as it has grown, as Roblox's
+    /// client raises a texture's resident levels one at a time. In blocks
+    /// the new largest level stays whole blocks, so one that wouldn't
+    /// keeps the level above.
+    pub fn from_level(&self, side: u32) -> Self {
+        let size = |level: usize| ((self.width >> level).max(1), (self.height >> level).max(1));
+        let mut first = 0;
+        while first + 1 < self.mips.len() {
+            let (w, h) = size(first + 1);
+            let whole_blocks = w.is_multiple_of(4) && h.is_multiple_of(4);
+            if w.max(h) < side || (self.encoding != Encoding::Rgba8 && !whole_blocks) {
+                break;
+            }
+            first += 1;
+        }
+        let (width, height) = size(first);
+        Self {
+            width,
+            height,
+            format: self.format,
+            encoding: self.encoding,
+            mips: self.mips[first..].to_vec(),
+            translucent: self.translucent,
+            gui_size: self.gui_size,
+        }
     }
 
     /// Bytes held, over every level.
     pub fn byte_len(&self) -> usize {
         self.mips.iter().map(Vec::len).sum()
     }
+}
+
+/// The size GUI measures an image of `size` in: its upload's, scaled
+/// down (the aspect kept) to fit 1024 × 1024, the size Roblox stored
+/// uploads at before it drew larger textures. Measured in Studio 0.748
+/// (docs/behavior/content/asset-fetching.md#textures): a 4096 × 4096 upload
+/// measures 1024 × 1024, a 1264 × 632 one (served as 1216 × 576) 1024 × 512.
+pub fn gui_size((width, height): (u32, u32)) -> (u32, u32) {
+    let longest = width.max(height);
+    if longest <= GUI_MAX_SIZE {
+        return (width, height);
+    }
+    let scale = |side: u32| {
+        ((u64::from(side) * u64::from(GUI_MAX_SIZE) + u64::from(longest) / 2) / u64::from(longest))
+            .max(1) as u32
+    };
+    (scale(width), scale(height))
+}
+
+/// `rgba` resized to `(width, height)`, its colors weighted by alpha so
+/// clear pixels don't darken the edges next to them.
+fn fit_rgba(mut rgba: ::image::RgbaImage, (width, height): (u32, u32)) -> ::image::RgbaImage {
+    let scale = |p: &mut ::image::Rgba<u8>, up: bool| {
+        let a = u32::from(p[3]);
+        for c in &mut p.0[..3] {
+            *c = if up {
+                (u32::from(*c) * 255 + a / 2)
+                    .checked_div(a)
+                    .map_or(0, |v| v.min(255) as u8)
+            } else {
+                ((u32::from(*c) * a + 127) / 255) as u8
+            };
+        }
+    };
+    rgba.pixels_mut().for_each(|p| scale(p, false));
+    let mut out = ::image::imageops::resize(
+        &rgba,
+        width,
+        height,
+        ::image::imageops::FilterType::Triangle,
+    );
+    out.pixels_mut().for_each(|p| scale(p, true));
+    out
+}
+
+/// The largest side GUI measures an image in ([`gui_size`]).
+pub const GUI_MAX_SIZE: u32 = 1024;
+
+/// Levels in a whole mip chain of `width` × `height`, down to 1 × 1.
+pub(crate) fn level_count(width: u32, height: u32) -> usize {
+    (u32::BITS - width.max(height).max(1).leading_zeros()) as usize
 }
 
 pub(crate) fn decode_rgba(bytes: &[u8]) -> Result<(::image::RgbaImage, ImageFormat), ImageError> {

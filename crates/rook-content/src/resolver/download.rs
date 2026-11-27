@@ -5,6 +5,7 @@ use std::time::{Duration, SystemTime};
 
 use super::*;
 use crate::Thumbnail;
+use crate::decode::image::ktx2;
 
 /// How long a stored thumbnail is used before the service is asked again:
 /// avatars and icons change, and Studio asks every session. A stale one
@@ -145,6 +146,134 @@ impl Resolver {
                 }
                 Err(f)
             }
+        }
+    }
+
+    /// An asset id wanted as a texture: Roblox's transcode of it, its mip
+    /// packs from the smallest up to the first whose largest level is at
+    /// least `1 << size` pixels across (or the last), joined
+    /// ([`ktx2::join`]); [`Fetched::larger`] says whether larger levels
+    /// are left. Each pack is cached on its own (`asset-<id>-ktx2-p<n>`),
+    /// so a larger request fetches only the packs it adds. Packs that
+    /// failed for now (network, being made) fail a texture growing on
+    /// screen, to be asked for again; one wanted whole draws smaller. No
+    /// transcode (not an image, refused with no key) is remembered like
+    /// any failure and draws the upload ([`Self::download`]); one being
+    /// made fails the first time ([`being_generated`], the loader asks
+    /// again), then draws the upload. A kept asset stays as kept.
+    pub(super) fn download_texture(&self, r: &ContentRef, size: u8) -> Result<Fetched, Failure> {
+        let ContentRef::Asset { id, version } = r else {
+            return self.download(r);
+        };
+        if version.is_none() && kept::version(*id).is_some() {
+            return self.download(r);
+        }
+        let base = r.cache_key().expect("an asset");
+        let key = |pack: u8| format!("{base}-ktx2-p{pack}");
+        // Pack 0 names the others.
+        let (first, url, mut fetched_any) = match self.cached_pack(&key(0)) {
+            Some(Ok((bytes, url))) => (bytes, url, false),
+            Some(Err(())) => return self.download(r),
+            None => {
+                let Some(delivery) = &self.delivery else {
+                    return self.download(r);
+                };
+                match delivery.texture_packs(*id, *version, &[0]) {
+                    Ok(mut got) => {
+                        let first = got.swap_remove(0);
+                        self.keep_pack(&key(0), &first.bytes, &first.url);
+                        (first.bytes, first.url, true)
+                    }
+                    // Not made yet: Roblox starts making it on this
+                    // request. The first time, the loader asks again two
+                    // seconds later, as Studio does; then it draws the
+                    // upload.
+                    Err(f)
+                        if delivery::being_generated(&f)
+                            && self.generating.lock().expect("generating").insert(*id) =>
+                    {
+                        return Err(f);
+                    }
+                    Err(f) => {
+                        if f.kind.is_lasting()
+                            && let Some(cache) = &self.cache
+                            && let Err(e) = cache.put_failure(&key(0), &f)
+                        {
+                            tracing::debug!(target: "content", "couldn't remember why {r}'s texture failed: {e}");
+                        }
+                        tracing::debug!(target: "content", "{r} as uploaded: no texture transcode ({f})");
+                        return self.download(r);
+                    }
+                }
+            }
+        };
+        let mut packs = vec![first];
+        let invalid = |e: &dyn std::fmt::Display| Failure::new(FailureKind::Invalid, e.to_string());
+        let file = ktx2::File::read(&packs[0]).map_err(|e| invalid(&e))?;
+        let wanted = file.packs_up_to(1 << u32::from(size.min(31)));
+        let mut larger = usize::from(wanted) + 1 < file.packs().len();
+        let mut missing = Vec::new();
+        for pack in 1..=wanted {
+            match self.cached_pack(&key(pack)) {
+                Some(Ok((bytes, _))) if missing.is_empty() => packs.push(bytes),
+                _ => missing.push(pack),
+            }
+        }
+        if !missing.is_empty()
+            && let Some(delivery) = &self.delivery
+        {
+            match delivery.texture_packs(*id, *version, &missing) {
+                Ok(got) => {
+                    for (pack, asset) in missing.iter().zip(got) {
+                        self.keep_pack(&key(*pack), &asset.bytes, &asset.url);
+                        packs.push(asset.bytes);
+                    }
+                    fetched_any = true;
+                }
+                // A pack being made or a network failure: a texture growing
+                // on screen asks again later; one wanted whole draws what
+                // it has.
+                Err(f) if !f.kind.is_lasting() && size != u8::MAX => return Err(f),
+                Err(f) => {
+                    tracing::debug!(target: "content", "{r}'s larger levels didn't come ({f}); drawing it smaller");
+                    larger = false;
+                }
+            }
+        }
+        let files: Vec<&[u8]> = packs.iter().map(Vec::as_slice).collect();
+        let bytes = ktx2::join(&files).map_err(|e| invalid(&e))?;
+        let kind = if fetched_any {
+            SourceKind::Delivery
+        } else {
+            SourceKind::Cache
+        };
+        let mut fetched = Fetched::new(bytes, kind, url);
+        fetched.larger = larger && packs.len() == usize::from(wanted) + 1;
+        Ok(fetched)
+    }
+
+    /// A texture pack from the cache: `Some(Err(()))` when the cache
+    /// remembers there is none (and no key could change that).
+    fn cached_pack(&self, key: &str) -> Option<Result<(Vec<u8>, String), ()>> {
+        match self.cache.as_ref()?.get(key) {
+            Cached::Hit { bytes, url, .. } => Some(Ok((bytes.to_vec(), url))),
+            // An anonymous refusal doesn't stand once there is a key to try.
+            Cached::Failed(f)
+                if f.kind == FailureKind::Forbidden
+                    && self.delivery.as_ref().is_some_and(|d| d.key().is_some()) =>
+            {
+                None
+            }
+            Cached::Failed(_) => Some(Err(())),
+            Cached::Miss => None,
+        }
+    }
+
+    fn keep_pack(&self, key: &str, bytes: &[u8], url: &str) {
+        if let Some(cache) = &self.cache
+            && let Err(e) = cache.put(key, bytes, url)
+        {
+            tracing::warn!(target: "content", "couldn't save {key} in {}: {e}", cache.dir().display());
         }
     }
 

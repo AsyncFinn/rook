@@ -15,6 +15,12 @@ impl Renderer {
         self.lights.read_voxels(&self.device, &self.queue)
     }
 
+    /// Where each scene entry is drawn.
+    #[cfg(test)]
+    pub(crate) fn placements(&self) -> Vec<(Space, Placement)> {
+        self.placements.clone()
+    }
+
     /// How many draw calls the last frame took.
     pub fn draw_counts(&self) -> DrawCounts {
         self.draw_counts

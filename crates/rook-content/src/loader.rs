@@ -71,10 +71,18 @@ pub enum Want {
     /// don't decode fail with [`FailureKind::Invalid`], or
     /// [`FailureKind::UnknownVersion`] for a version Rook doesn't read.
     Mesh,
-    /// An image: the worker decodes it to RGBA8 with mips into
-    /// [`Fetched::image`]; bytes that aren't an image fail with
-    /// [`FailureKind::Invalid`].
+    /// An image as uploaded (what GUI and the sky draw): the worker
+    /// decodes it to RGBA8 with mips into [`Fetched::image`], fitted to
+    /// 1024 × 1024 (`Image::decode_gui`); bytes that aren't an image fail
+    /// with [`FailureKind::Invalid`].
     Image,
+    /// An image for a surface in the world (decals, textures, meshes,
+    /// effects), as Roblox's client fetches those: its transcode for
+    /// textures down to the levels from `1 << n` pixels across (or the
+    /// largest it has), at first only `0` (its smallest pack), and larger
+    /// as it grows on screen; where there is no transcode, as uploaded.
+    /// Decoded into [`Fetched::image`] like [`Want::Image`], in blocks.
+    Texture(u8),
     /// A sound: the worker decodes it to 16-bit PCM into
     /// [`Fetched::audio`] and frees the file, leaving [`Fetched::bytes`]
     /// empty; bytes that aren't a WAV, Ogg or MP3 sound fail with
@@ -87,6 +95,10 @@ pub enum Want {
 }
 
 impl Want {
+    /// A texture at its full size, every pack at once: for what Rook
+    /// doesn't size on screen (effects, adornments).
+    pub const WHOLE_TEXTURE: Want = Want::Texture(u8::MAX);
+
     /// What a content property must hold: a mesh for the `MeshId` of a
     /// mesh class or MeshPart (`mesh_owner`; files store it as
     /// `MeshContent`, some old MeshParts as `MeshID`) and for a union's

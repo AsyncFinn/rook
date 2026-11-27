@@ -148,6 +148,14 @@ pub struct SceneCache {
     images: content::images::LoadedImages,
     /// The ClickDetector hand's image once made, and its size in pixels.
     hand: Option<(ImageHash, Vec2)>,
+    /// The camera and view size textures are sized on screen by
+    /// ([`SceneCache::set_view`]).
+    view: Option<content::streaming::View>,
+    /// The entries (indices into `scene.parts`) drawing a texture that
+    /// may still grow on screen ([`SceneCache::note_streaming`]).
+    streaming: FxHashSet<usize>,
+    /// When those were last looked over.
+    streamed_at: Option<std::time::Instant>,
 }
 
 impl SceneCache {
@@ -187,6 +195,9 @@ impl SceneCache {
             gui_arrived: Vec::new(),
             images,
             hand: None,
+            view: None,
+            streaming: FxHashSet::default(),
+            streamed_at: None,
         };
         cache.rebuild(dom);
         cache
@@ -198,6 +209,7 @@ impl SceneCache {
         self.model_highlights.clear();
         self.scene.highlights.clear();
         self.scene.parts.clear();
+        self.streaming.clear();
         self.poses.clear();
         self.free.clear();
         self.index.clear();

@@ -167,6 +167,7 @@ pub fn bench(
         let ahead = (camera.rotation * -Vec3::Z) * Vec3::new(1.0, 0.0, 1.0);
         camera.position += ahead.normalize_or_zero() * how.fly;
         let t = Instant::now();
+        cache.set_view(&camera, width, height);
         let update = cache.update(game.view_mut(), camera.position);
         if update.changed() {
             updates += 1;

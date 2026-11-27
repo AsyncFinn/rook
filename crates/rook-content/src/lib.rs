@@ -86,6 +86,9 @@ pub struct Fetched {
     /// The decoded model file, when a [`Loader`] was asked for one
     /// ([`Want::Model`]).
     pub model: Option<Arc<rook_formats::Loaded>>,
+    /// A texture's transcode with larger levels than these still to fetch
+    /// ([`Want::Texture`]): asked for larger, it can come larger.
+    pub larger: bool,
 }
 
 impl Fetched {
@@ -99,6 +102,7 @@ impl Fetched {
             image: None,
             audio: None,
             model: None,
+            larger: false,
         }
     }
 }
